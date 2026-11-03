@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "Gam'eya",
+    "tagline": "Your savings circle, simple and safe",
+    "navigation": "Main navigation"
+  },
+  "nav": {
+    "home": "Home"
+  },
+  "common": {
+    "otherLanguage": "العربية",
+    "deletedUser": "Deleted user",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "retry": "Try again",
+    "back": "Back",
+    "next": "Next"
+  },
+  "status": {
+    "pending": "Pending",
+    "active": "Active",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "paid": "Paid",
+    "overdue": "Overdue",
+    "verified": "Verified",
+    "unverified": "Not verified",
+    "blocked": "Blocked",
+    "deleted": "Deleted"
+  },
+  "errors": {
+    "VALIDATION_FAILED": "Some details are not valid. Please check and try again.",
+    "UNAUTHENTICATED": "Your session has ended. Please sign in again.",
+    "FORBIDDEN": "You do not have permission to do this.",
+    "NOT_FOUND": "We could not find what you are looking for.",
+    "RATE_LIMITED": "Too many attempts. Please wait a moment and try again.",
+    "INVALID_PHONE": "The mobile number is not valid.",
+    "OTP_INVALID": "The verification code is not correct.",
+    "OTP_EXPIRED": "The verification code has expired. Request a new one.",
+    "OTP_LOCKED": "Attempts are paused after too many mistakes. Try again in 15 minutes.",
+    "OTP_RESEND_TOO_SOON": "Please wait a moment before requesting a new code.",
+    "OTP_RESEND_LIMIT": "You have reached the code request limit. Try again later.",
+    "REFRESH_TOKEN_INVALID": "Your session has ended. Please sign in again.",
+    "REFRESH_TOKEN_REUSED": "Your session was ended to protect your account. Please sign in again.",
+    "USER_BLOCKED": "This account is blocked. Please contact support.",
+    "NAME_INVALID": "The name is not valid. Use letters only.",
+    "EMAIL_TOKEN_INVALID": "The verification link is not valid.",
+    "EMAIL_TOKEN_EXPIRED": "The verification link has expired. Request a new one.",
+    "EMAIL_RESEND_LIMIT": "You have reached the limit for verification emails. Try again in an hour.",
+    "EMAIL_IN_USE": "This email address is already in use.",
+    "ACCOUNT_HAS_ACTIVE_GAMEYAS": "You cannot delete your account while you are in active Gam'eyas.",
+    "FILE_TOO_LARGE": "The file is too large. The maximum is 5 MB.",
+    "FILE_TYPE_NOT_ALLOWED": "This file type is not allowed. Use JPG, PNG or HEIC.",
+    "CONCURRENCY_CONFLICT": "This was changed elsewhere. Refresh the page and try again.",
+    "SMS_SEND_FAILED": "Couldn't send the message. Try again shortly.",
+    "INTERNAL": "Something went wrong. Please try again.",
+    "INVALID_LANGUAGE": "This language is not supported."
+  }
+}
