@@ -1,0 +1,10 @@
+[Unit]
+Description=Gameya nightly backup (database and files to Backblaze B2)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+ExecStart=/opt/gameya/backup.sh
