@@ -3,13 +3,20 @@ using Microsoft.EntityFrameworkCore.Design;
 
 namespace Gameya.Infrastructure.Persistence;
 
-/// <summary>Used by `dotnet ef` only; it never connects when merely generating migrations.</summary>
+/// <summary>
+/// Used by `dotnet ef` and by the self-contained efbundle, which is the production migration path (R31).
+/// It requires ConnectionStrings__Migrator and never falls back to a default, so a bundle cannot silently
+/// migrate the wrong database. Local use: `ConnectionStrings__Migrator="Host=localhost;Database=gameya;..." dotnet ef ...`
+/// (any value works for `migrations add` and for building the bundle; neither connects).
+/// </summary>
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
     {
-        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Migrator")
-            ?? "Host=localhost;Database=gameya;Username=gameya_migrator;Password=gameya_migrator_dev";
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Migrator");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException(
+                "ConnectionStrings__Migrator is not set. Set this environment variable to the gameya_migrator connection string before running dotnet ef or the migrations bundle.");
         var builder = new DbContextOptionsBuilder<AppDbContext>();
         AppDbContext.Configure(builder, connectionString);
         return new AppDbContext(builder.Options);

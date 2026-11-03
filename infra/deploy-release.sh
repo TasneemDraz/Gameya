@@ -132,7 +132,7 @@ log "waiting for /health (up to ${HEALTH_TIMEOUT_SECONDS}s)"
 deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
 healthy=0
 while ((SECONDS < deadline)); do
-  if body="$(curl "${curl_args[@]}" "https://$SITE_ADDRESS/health" 2> /dev/null)" && grep -q 'Healthy' <<< "$body"; then
+  if body="$(curl "${curl_args[@]}" "https://$SITE_ADDRESS/health" 2> /dev/null)" && grep -q '^{"status":"Healthy"' <<< "$body"; then
     healthy=1
     break
   fi

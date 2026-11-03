@@ -68,9 +68,9 @@ On the VM, `deploy-release.sh`:
 
 1. starts `postgres` and `caddy` and reloads `/opt/gameya/caddy/Caddyfile` into the running Caddy (an invalid Caddyfile fails the deploy before anything changes);
 2. applies `roles.sql` (idempotent roles and grants; passwords go over stdin);
-3. runs the `efbundle` as `gameya_migrator` in a `runtime-deps` container on the compose network;
+3. runs the `efbundle` (its design-time factory throws unless `ConnectionStrings__Migrator` is set; the script passes it; building the bundle needs a placeholder, which `deploy.yml` sets, and local `dotnet ef migrations add` needs any value in that variable) as `gameya_migrator` in a `runtime-deps` container on the compose network;
 4. records the previous `API_TAG` and the `releases/current` target, writes the new `API_TAG` to `image.env`, restarts `api` and flips `releases/current` (a relative symlink) to the new release;
-5. polls `https://<SITE_ADDRESS>/health` for up to 5 minutes until it contains `Healthy`;
+5. polls `https://<SITE_ADDRESS>/health` for up to 5 minutes until the top-level status is `Healthy` (`Degraded` and `Unhealthy` keep waiting);
 6. on failure, restores the previous tag and release, restarts `api` and exits 1;
 7. prunes releases and `gameya-api` images beyond the newest 3.
 

@@ -42,6 +42,10 @@ jobs:
           global-json-file: global.json
 
       - name: Build the self-contained linux-arm64 migrations bundle
+        # The design-time factory requires a connection string even to build; this one is never used to connect.
+        # The real value is supplied by deploy-release.sh when the bundle runs.
+        env:
+          ConnectionStrings__Migrator: Host=build-placeholder;Database=gameya
         run: |
           dotnet tool restore
           dotnet ef migrations bundle \
