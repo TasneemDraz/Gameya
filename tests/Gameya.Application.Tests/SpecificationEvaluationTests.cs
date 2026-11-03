@@ -1,5 +1,6 @@
 using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
+using Gameya.Application.Common.Specifications;
 using Gameya.Application.Users.Specifications;
 using Gameya.Domain.Users;
 
@@ -13,6 +14,11 @@ public class SpecificationEvaluationTests
     {
         public NameAndIdSpec() =>
             Query.Select(u => new ValueTuple<Guid, string?>(u.Id, u.FullName));
+    }
+
+    private sealed class IdOnlySpec : Specification<Domain.Users.User, Guid>
+    {
+        public IdOnlySpec() => Query.Select(u => u.Id);
     }
 
     private static Domain.Users.User NewUser(string phone) =>
@@ -58,5 +64,31 @@ public class SpecificationEvaluationTests
         var rows = SpecificationEvaluator.Default
             .GetQuery(new[] { u }.AsQueryable(), new NameAndIdSpec()).ToList();
         rows.ShouldBe([(u.Id, (string?)"Mona Ali")]);
+    }
+
+    [Fact]
+    public void Scalar_projection_goes_through_the_extension_query_builder()
+    {
+        var u = NewUser("01012345678");
+        SpecificationQueryExtensions.BuildProjectionQuery(new[] { u }.AsQueryable(), new IdOnlySpec())
+            .ToList().ShouldBe([u.Id]);
+    }
+
+    [Fact]
+    public void Value_tuple_projection_goes_through_the_extension_query_builder()
+    {
+        var u = NewUser("01012345678");
+        u.SetProfile("Mona Ali", Language.En, Now);
+        SpecificationQueryExtensions.BuildProjectionQuery(new[] { u }.AsQueryable(), new NameAndIdSpec())
+            .ToList().ShouldBe([(u.Id, (string?)"Mona Ali")]);
+    }
+
+    [Fact]
+    public void Entity_query_builder_applies_the_specification()
+    {
+        var a = NewUser("01012345678");
+        var b = NewUser("01112345678");
+        SpecificationQueryExtensions.BuildEntityQuery(new[] { a, b }.AsQueryable(), new UserByIdSpec(a.Id))
+            .ToList().ShouldBe([a]);
     }
 }

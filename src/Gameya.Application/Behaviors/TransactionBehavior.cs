@@ -30,8 +30,9 @@ public sealed class TransactionBehavior<TRequest, TResponse>(IAppDbContext db)
         }
         catch (DomainException ex) when (ex.CommitStateChanges)
         {
-            await db.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
+            // State must persist even if the client aborted the request.
+            await db.SaveChangesAsync(CancellationToken.None);
+            await tx.CommitAsync(CancellationToken.None);
             throw;
         }
     }

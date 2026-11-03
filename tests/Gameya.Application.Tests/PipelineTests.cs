@@ -263,6 +263,33 @@ public class PipelineTests
     }
 
     [Fact]
+    public async Task CommitStateChanges_path_saves_and_commits_with_a_non_cancelled_token_even_if_request_aborted()
+    {
+        var db = new Db();
+        var tokens = new List<CancellationToken>();
+        db.Context.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(c =>
+        {
+            tokens.Add(c.Arg<CancellationToken>());
+            db.Calls.Add("save");
+            return Task.FromResult(1);
+        });
+        db.Tx.When(t => t.CommitAsync(Arg.Any<CancellationToken>())).Do(c =>
+        {
+            tokens.Add(c.Arg<CancellationToken>()); // Db already records "commit"
+        });
+        var tx = new TransactionBehavior<AuthCmd, int>(db.Context);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Should.ThrowAsync<DomainException>(() => tx.Handle(new AuthCmd(),
+            _ => throw new DomainException(ErrorCodes.OTP_INVALID, null, commitStateChanges: true), cts.Token));
+
+        db.Calls.ShouldBe(["begin", "save", "commit"]);
+        tokens.Count.ShouldBe(2);
+        tokens.ShouldAllBe(t => !t.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task Other_exceptions_roll_back()
     {
         var db = new Db();
