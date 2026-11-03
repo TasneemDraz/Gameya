@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A deployable, tested skeleton for Gam'eya covering phone OTP auth, profile with verified email, an append-only activity log, an Arabic/English RTL Angular shell, git hooks, CI, and Azure deployment.
+**Goal:** A deployable, tested skeleton for Gam'eya covering phone OTP auth, profile with verified email, an append-only activity log, an Arabic/English RTL Angular shell, git hooks, CI, and $0 free-tier deployment.
 
-**Architecture:** A modular monolith with Clean Architecture layers (Domain → Application → Infrastructure → Api). Each layer has feature folders. A MediatR pipeline (validation → authorization → transaction → activity log) wraps every request. An Angular SPA is served by Azure Static Web Apps, and its linked App Service backend serves `/api` on the same origin.
+**Architecture:** A modular monolith with Clean Architecture layers (Domain → Application → Infrastructure → Api). Each layer has feature folders. A MediatR pipeline (validation → authorization → transaction → activity log) wraps every request. Each environment is one Oracle Cloud Always Free ARM64 VM running Docker Compose. Caddy serves the Angular build and proxies `/api` to the API on the same origin, next to a PostgreSQL container.
 
-**Tech Stack:** .NET 10 (LTS), ASP.NET Core, MediatR, FluentValidation, Ardalis.Specification (+ `.EntityFrameworkCore`), EF Core + Npgsql (PostgreSQL 17), Hangfire.PostgreSql, Magick.NET, Azure Blob/ACS Email, Serilog, OpenTelemetry. Tests: xUnit, Shouldly, NSubstitute, Testcontainers, NetArchTest. Frontend: Angular (latest stable), Angular Material, Transloco, Playwright. Tooling: Husky, lint-staged, commitlint. Infra: Docker, GitHub Actions, Bicep.
+**Tech Stack:** .NET 10 (LTS), ASP.NET Core, MediatR, FluentValidation, Ardalis.Specification (+ `.EntityFrameworkCore`), EF Core + Npgsql (PostgreSQL 17), Hangfire.PostgreSql, Magick.NET, MailKit (SMTP), Serilog, OpenTelemetry (OTLP). Tests: xUnit, Shouldly, NSubstitute, Testcontainers, NetArchTest. Frontend: Angular (latest stable), Angular Material, Transloco, Playwright. Tooling: Husky, lint-staged, commitlint. Infra: Docker Compose, Caddy, GitHub Actions (SSH deploy), Backblaze B2 + rclone for backups.
 
 **Spec:** `docs/superpowers/specs/2026-11-03-foundation-design.md` (requirements: `docs/requirements.md`)
 
@@ -21,7 +21,7 @@
   - Every read, both entity lookups in commands and DTO projections in queries, uses a named spec class in the feature's `Specifications/` folder.
   - Projections are `Specification<TEntity, TResult>` with `Query.Select(...)`, so EF translates them to SQL.
   - Handlers never write ad-hoc `.Where`/`.Select` on a `DbSet`. An architecture test enforces this.
-  - Values that SQL can't compute (for example SAS photo URLs) are projected as raw fields into a `*Row` record and finished by the handler.
+  - Values that SQL can't compute (for example signed photo URLs) are projected as raw fields into a `*Row` record and finished by the handler.
 - **Central package management:** `Directory.Packages.props`. Nullable enabled, `TreatWarningsAsErrors=true`.
 - **Time:**
   - Never call `DateTime.Now`, `DateTime.UtcNow`, or `DateTimeOffset.UtcNow` outside `SystemClock`. An architecture test enforces this.
@@ -33,7 +33,7 @@
 - **API errors:**
   - RFC 7807 ProblemDetails with an extension `code` (UPPER_SNAKE) and optional `params` object. The server never returns user-facing text.
   - Validation failures return 400 with code `VALIDATION_FAILED` and `errors` keyed by field.
-- **Error code list (`ErrorCodes`):** `VALIDATION_FAILED, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, RATE_LIMITED, INVALID_PHONE, OTP_INVALID, OTP_EXPIRED, OTP_LOCKED, OTP_RESEND_TOO_SOON, OTP_RESEND_LIMIT, REFRESH_TOKEN_INVALID, REFRESH_TOKEN_REUSED, USER_BLOCKED, NAME_INVALID, EMAIL_TOKEN_INVALID, EMAIL_TOKEN_EXPIRED, EMAIL_RESEND_LIMIT, EMAIL_IN_USE, ACCOUNT_HAS_ACTIVE_GAMEYAS, FILE_TOO_LARGE, FILE_TYPE_NOT_ALLOWED, CONCURRENCY_CONFLICT`.
+- **Error code list (`ErrorCodes`):** `VALIDATION_FAILED, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, RATE_LIMITED, INVALID_PHONE, OTP_INVALID, OTP_EXPIRED, OTP_LOCKED, OTP_RESEND_TOO_SOON, OTP_RESEND_LIMIT, REFRESH_TOKEN_INVALID, REFRESH_TOKEN_REUSED, USER_BLOCKED, NAME_INVALID, EMAIL_TOKEN_INVALID, EMAIL_TOKEN_EXPIRED, EMAIL_RESEND_LIMIT, EMAIL_IN_USE, ACCOUNT_HAS_ACTIVE_GAMEYAS, FILE_TOO_LARGE, FILE_TYPE_NOT_ALLOWED, CONCURRENCY_CONFLICT, SMS_SEND_FAILED`.
 - **Auth values:**
   - OTP: 6 digits, valid 5 min. 5 wrong attempts → 15-min lock. 60 s between sends. Max 4 sends (1 + 3 resends) per 15-min window.
   - Access JWT: 10 min.
@@ -65,7 +65,7 @@
 package.json commitlint.config.mjs .lintstagedrc.mjs .husky/{pre-commit,commit-msg,pre-push}
 tools/check-i18n.mjs
 docker-compose.yml  docker/postgres/init.sql  src/Gameya.Api/Dockerfile
-infra/main.bicep infra/modules/*.bicep infra/sql/roles.sql
+infra/{compose.prod.yml,Caddyfile,bootstrap-vm.sh,deploy-release.sh,backup.sh,restore.sh,gameya-backup.service,gameya-backup.timer} infra/sql/roles.sql
 .github/workflows/{ci.yml,deploy.yml}
 src/Gameya.Domain/
   Common/{Entity.cs,IDomainEvent.cs,IActivityEvent.cs,DomainException.cs,ErrorCodes.cs,CairoCalendar.cs}
@@ -85,14 +85,14 @@ src/Gameya.Application/
 src/Gameya.Infrastructure/
   Persistence/{AppDbContext.cs,Configurations/*.cs,Migrations/*,ActivityLogImmutabilityInterceptor.cs,DomainEventCollector.cs}
   Security/{HmacSecretHasher.cs,JwtTokenService.cs}
-  Sms/{LoggingSmsSender.cs,DevOtpStore.cs,ProviderSmsSender.cs}
-  Email/{SmtpEmailSender.cs,AcsEmailSender.cs}
-  Files/{BlobFileStore.cs,MagickImageProcessor.cs}
+  Sms/{LoggingSmsSender.cs,DevOtpStore.cs,SmsGateSmsSender.cs,ProviderSmsSender.cs}
+  Email/SmtpEmailSender.cs
+  Files/{LocalFileStore.cs,SignedFileUrls.cs,MagickImageProcessor.cs}
   Time/SystemClock.cs
   Participation/NoParticipationChecker.cs
   DependencyInjection.cs
 src/Gameya.Api/
-  Program.cs  Endpoints/{AuthEndpoints.cs,MeEndpoints.cs,DevEndpoints.cs}
+  Program.cs  Endpoints/{AuthEndpoints.cs,MeEndpoints.cs,FileEndpoints.cs,DevEndpoints.cs}
   Infrastructure/{ProblemDetailsMapping.cs,HttpCurrentUser.cs,RefreshCookie.cs,RateLimiting.cs,HealthChecks.cs,Observability.cs}
 src/gameya-web/  (Angular; files listed per task)
 tests/Gameya.Domain.Tests/  tests/Gameya.Application.Tests/  tests/Gameya.Api.IntegrationTests/  tests/Gameya.ArchitectureTests/
@@ -216,7 +216,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
   - **`class User : Entity`.**
     - `static User Register(Guid id, PhoneNumber phone, Language language, DateTimeOffset now)` raises `UserRegistered`.
     - `void SetProfile(string fullName, Language language, DateTimeOffset now)` trims, enforces 2–60 chars else `NAME_INVALID`, sets `ProfileComplete = true`, and raises `ProfileUpdated(old, new)` only when something changed.
-    - `void SetPhoto(string? blobKey, DateTimeOffset now)`.
+    - `void SetPhoto(string? photoKey, DateTimeOffset now)`.
     - `void RequestEmailChange(string email, string tokenHash, DateTimeOffset now)` throws `EMAIL_RESEND_LIMIT{retryAt}` if 3 sends happened in the last rolling hour. Tracks send times in `List<DateTimeOffset> EmailSendTimes` (json column) and prunes entries older than 1 h.
     - `void ResendEmailVerification(string tokenHash, DateTimeOffset now)` has the same limit and requires a `PendingEmail`.
     - `void VerifyEmail(string tokenHash, DateTimeOffset now)` throws `EMAIL_TOKEN_INVALID` / `EMAIL_TOKEN_EXPIRED`. Moves `PendingEmail → Email`, sets `EmailVerifiedAt`, clears the pending fields, and raises `EmailVerified`.
@@ -355,13 +355,20 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 ### Task 7: API host, error mapping, OTP request and verify
 
 **Files:**
-- Create: `src/Gameya.Api/Program.cs`, `Infrastructure/{ProblemDetailsMapping.cs,HttpCurrentUser.cs,RateLimiting.cs}`, `Endpoints/{AuthEndpoints.cs,DevEndpoints.cs}`, `src/Gameya.Application/Auth/{RequestOtp.cs,VerifyOtp.cs,SessionResult.cs,SessionIssuer.cs}`, `Abstractions/{ISmsSender.cs,ISecretHasher.cs,ITokenService.cs}`, `src/Gameya.Infrastructure/Security/{HmacSecretHasher.cs,JwtTokenService.cs}`, `Sms/{LoggingSmsSender.cs,DevOtpStore.cs}`
-- Test: `tests/Gameya.Api.IntegrationTests/Auth/OtpFlowTests.cs`, `tests/Gameya.Api.IntegrationTests/GameyaApiFactory.cs`
+- Create: `src/Gameya.Api/Program.cs`, `Infrastructure/{ProblemDetailsMapping.cs,HttpCurrentUser.cs,RateLimiting.cs}`, `Endpoints/{AuthEndpoints.cs,DevEndpoints.cs}`, `src/Gameya.Application/Auth/{RequestOtp.cs,VerifyOtp.cs,SessionResult.cs,SessionIssuer.cs}`, `Abstractions/{ISmsSender.cs,ISecretHasher.cs,ITokenService.cs}`, `src/Gameya.Infrastructure/Security/{HmacSecretHasher.cs,JwtTokenService.cs}`, `Sms/{LoggingSmsSender.cs,DevOtpStore.cs,SmsGateSmsSender.cs}`
+- Test: `tests/Gameya.Api.IntegrationTests/Auth/OtpFlowTests.cs`, `tests/Gameya.Api.IntegrationTests/Sms/SmsGateSmsSenderTests.cs`, `tests/Gameya.Api.IntegrationTests/GameyaApiFactory.cs`
 
 **Interfaces:**
 - Consumes: `OtpChallenge`, `User`, `RefreshToken`, the pipeline.
 - Produces:
-  - `ISmsSender.SendAsync(PhoneNumber to, string message, CancellationToken)`.
+  - `ISmsSender.SendAsync(PhoneNumber to, string message, CancellationToken)`. On delivery failure, an adapter throws `DomainException(SMS_SEND_FAILED)`.
+  - **Adapter selection** by `Sms:Provider`: `Logging` → `LoggingSmsSender`, `SmsGate` → `SmsGateSmsSender`. Later: the paid provider's adapter, and optionally WhatsApp. An unknown value fails at startup.
+  - **`SmsGateSmsSender`** (SMS Gate for Android, open source):
+    - Typed `HttpClient` with a 10 s timeout and **no retries**, so a user never receives duplicate codes.
+    - Config `Sms:SmsGate:{BaseUrl,Username,Password}`. `BaseUrl` defaults to the app's public cloud relay `https://api.sms-gate.app/3rdparty/v1`; a self-hosted SMS Gate server URL also works.
+    - Sends `POST {BaseUrl}/message` with HTTP Basic auth and a JSON body with the message text and `phoneNumbers: [E164]`. Confirm the exact payload against the app's API docs at implementation time.
+    - A non-2xx response, timeout, or network error → `SMS_SEND_FAILED`.
+    - Logs only the masked phone and the gateway's message id, never the text.
   - `ISecretHasher.Hash(string value) → string`.
   - `ITokenService.CreateAccessToken(User) → (string Token, DateTimeOffset ExpiresAt)` (claims `sub`, `role`*, `lang`; issuer and audience from `Jwt:*`; HS256 key `Jwt:SigningKey`) and `ITokenService.NewOpaqueToken() → string` (32 bytes, base64url).
   - `record SessionResult(string AccessToken, DateTimeOffset AccessTokenExpiresAt, bool ProfileComplete, string RefreshToken)`. `RefreshToken` never goes in a response body; the endpoint moves it to the cookie.
@@ -377,7 +384,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
     - Both are under rate-limit policy `"otp"`: fixed window of 10 requests per 10 minutes per client IP, 429 + `RATE_LIMITED`.
   - `GET /api/dev/otp/{phone}` → `{code}` from `DevOtpStore`. Mapped only when the environment is `Development` or `E2E`.
   - `ProblemDetailsMapping`:
-    - `DomainException` → 400, except `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `OTP_LOCKED`/`OTP_RESEND_*`/`EMAIL_RESEND_LIMIT` (429), `ACCOUNT_HAS_ACTIVE_GAMEYAS`/`EMAIL_IN_USE` (409), `USER_BLOCKED` (403).
+    - `DomainException` → 400, except `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `OTP_LOCKED`/`OTP_RESEND_*`/`EMAIL_RESEND_LIMIT` (429), `ACCOUNT_HAS_ACTIVE_GAMEYAS`/`EMAIL_IN_USE` (409), `USER_BLOCKED` (403), `SMS_SEND_FAILED` (503).
     - `DbUpdateConcurrencyException` → 409 `CONCURRENCY_CONFLICT`.
     - Unique violation on `otp_challenges.phone` → retry the command once, then 409.
     - Unhandled → 500 with code `INTERNAL`, no details.
@@ -391,6 +398,12 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
   - `Parallel_requests_for_same_phone_never_500` (Review Focus 3): 2 concurrent requests return statuses ⊆ {202, 429}.
   - `Blocked_user_cannot_log_in_USER_BLOCKED`.
   - `Unknown_exception_returns_problem_with_code_INTERNAL_and_no_stack`.
+  - `Sms_failure_returns_503_SMS_SEND_FAILED_and_does_not_consume_a_resend`: substitute an `ISmsSender` that throws. Expected: 503. Then a working sender immediately gets 202, not `OTP_RESEND_TOO_SOON`, because the transaction rolled back.
+  - **`SmsGateSmsSenderTests`** (stub `HttpMessageHandler`, no network):
+    - `Sends_basic_auth_and_e164_number_and_text`.
+    - `Non_success_status_throws_SMS_SEND_FAILED`.
+    - `Timeout_throws_SMS_SEND_FAILED_and_sends_once` (exactly one HTTP call, so there are no retries).
+    - `Log_contains_masked_phone_and_never_the_code`.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement `Program.cs` (AddApplication, AddInfrastructure, JWT bearer auth, ProblemDetails, rate limiter, endpoint groups), the handlers, and the adapters. `HttpCurrentUser` reads `sub` and `role` claims.
 - [ ] **Step 4:** Run. Expected: PASS.
@@ -437,33 +450,43 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 ### Task 9: Profile and photo
 
 **Files:**
-- Create: `src/Gameya.Application/Users/{GetMe.cs,UpdateProfile.cs,SetPhoto.cs,RemovePhoto.cs,MeDto.cs}`, `Abstractions/{IFileStore.cs,IImageProcessor.cs}`, `src/Gameya.Infrastructure/Files/{BlobFileStore.cs,MagickImageProcessor.cs}`, `src/Gameya.Api/Endpoints/MeEndpoints.cs`
-- Test: `tests/Gameya.Api.IntegrationTests/Users/ProfileTests.cs`, `tests/Gameya.Api.IntegrationTests/TestFiles/{photo.jpg,photo.heic,doc.pdf}`
+- Create: `src/Gameya.Application/Users/{GetMe.cs,UpdateProfile.cs,SetPhoto.cs,RemovePhoto.cs,MeDto.cs}`, `src/Gameya.Application/Files/GetSignedFile.cs`, `Abstractions/{IFileStore.cs,IImageProcessor.cs}`, `src/Gameya.Infrastructure/Files/{LocalFileStore.cs,SignedFileUrls.cs,MagickImageProcessor.cs}`, `src/Gameya.Api/Endpoints/{MeEndpoints.cs,FileEndpoints.cs}`
+- Test: `tests/Gameya.Api.IntegrationTests/Users/ProfileTests.cs`, `tests/Gameya.Api.IntegrationTests/Files/SignedFileTests.cs`, `tests/Gameya.Api.IntegrationTests/TestFiles/{photo.jpg,photo.heic,doc.pdf}`
 
 **Interfaces:**
 - Produces:
-  - `IFileStore.UploadAsync(string container, string key, Stream content, string contentType, CancellationToken)`, `DeleteAsync(container, key, ct)`, and `Uri GetReadUrl(string container, string key, TimeSpan lifetime)` (SAS, 5 min). Containers: `"profile-photos"`, later `"proofs"`.
+  - `IFileStore.UploadAsync(string container, string key, Stream content, string contentType, CancellationToken)`, `DeleteAsync(container, key, ct)`, `OpenReadAsync(container, key, ct) → Task<Stream?>`, and `Uri GetReadUrl(string container, string key, TimeSpan lifetime)` (5 min). Containers: `"profile-photos"`, later `"proofs"`. The interface is storage-neutral so an S3-compatible store can replace `LocalFileStore` later.
+  - **`LocalFileStore`:** writes under `Storage:RootPath/{container}/{key}` (prod: the `files` Docker volume mounted at `/data/files`; tests: a temp directory per fixture). Writes go to a temp file first, then an atomic rename. Containers come from an allowlist. Keys must match `^[0-9a-f-]{36}/[0-9a-f-]{36}\.jpg$`, so path traversal is impossible.
+  - **`SignedFileUrls`:** `GetReadUrl` returns the relative URL `/api/files/{container}/{key}?exp={unixSeconds}&sig={base64url(HMAC-SHA256(Storage:UrlSigningKey, "{container}/{key}:{exp}"))}`. `exp` comes from `IClock`. Signatures are compared with `FixedTimeEquals`.
+  - `GetSignedFileQuery(string Container, string Key, long Exp, string Sig)` with `[PublicAccess]`, because the signature is the credential. A bad signature, expired link, or invalid container/key → `FORBIDDEN` (403). A missing file → `NOT_FOUND`. Returns `record FileContent(Stream Content, string ContentType)`.
+  - **Endpoint:** `GET /api/files/{container}/{**key}` → the file with `Cache-Control: private, max-age=300` and `X-Content-Type-Options: nosniff`.
   - `IImageProcessor.ToJpeg(Stream input, int maxSize) → Stream`. Throws `FILE_TYPE_NOT_ALLOWED` unless Magick identifies the format as JPEG, PNG, or HEIC (content sniffing, not extension).
-  - `record MeRow(Guid Id, string? FullName, string PhoneE164, string? Email, DateTimeOffset? EmailVerifiedAt, string? PendingEmail, string? PhotoKey, Language Language, bool ProfileComplete)` is produced by `MeRowSpec` (SQL projection). `GetMeHandler` turns it into `MeDto`, adding `PhotoUrl = fileStore.GetReadUrl(...)` because SAS URLs can't be computed in SQL.
+  - `record MeRow(Guid Id, string? FullName, string PhoneE164, string? Email, DateTimeOffset? EmailVerifiedAt, string? PendingEmail, string? PhotoKey, Language Language, bool ProfileComplete)` is produced by `MeRowSpec` (SQL projection). `GetMeHandler` turns it into `MeDto`, adding `PhotoUrl = fileStore.GetReadUrl(...)` because signed URLs can't be computed in SQL.
   - `record MeDto(Guid Id, string? FullName, string Phone, string? Email, bool EmailVerified, string? PendingEmail, Uri? PhotoUrl, string Language, bool ProfileComplete)`. `Phone` here is the caller's own E.164. This is the only place a raw phone may appear, and it's annotated `[OwnPhone]` for the Task 11 architecture test.
   - **Requests:**
     - `GetMeQuery` and `UpdateProfileCommand(string FullName, string Language)` (validator: Language ∈ {ar, en}).
-    - `SetPhotoCommand(Stream Content, long Length)`: `Length > 5*1024*1024` → `FILE_TOO_LARGE`. Key is `{userId}/{Guid.CreateVersion7()}.jpg`. Deletes the old blob.
+    - `SetPhotoCommand(Stream Content, long Length)`: `Length > 5*1024*1024` → `FILE_TOO_LARGE`. Key is `{userId}/{Guid.CreateVersion7()}.jpg`. Deletes the old photo file.
     - `RemovePhotoCommand`.
     - All `[RequiresAuth]`.
   - **Endpoints:** `GET /api/me`, `PUT /api/me/profile`, `PUT /api/me/photo` (multipart field `file`, with `RequestSizeLimit` 5 MB + 64 KB), `DELETE /api/me/photo`.
-  - **Config:** `Storage:ConnectionString` (Azurite in dev and tests via Testcontainers `mcr.microsoft.com/azure-storage/azurite`).
+  - **Config:** `Storage:RootPath`, `Storage:UrlSigningKey` (≥ 32 bytes; startup fails if missing outside Development/E2E).
 
 - [ ] **Step 1: Write failing tests:**
   - `UpdateProfile_sets_name_and_completes_profile_and_logs_PROFILE_UPDATED`.
   - `UpdateProfile_rejects_one_char_name_with_NAME_INVALID`.
-  - `Upload_jpg_returns_photo_url_resized_to_512` (download the SAS URL and check max dimension ≤ 512).
+  - `Upload_jpg_returns_photo_url_resized_to_512` (download the signed URL with the factory client and check max dimension ≤ 512).
+  - **`SignedFileTests`:**
+    - `Tampered_signature_returns_403_FORBIDDEN`.
+    - `Expired_url_returns_403_FORBIDDEN` (clock +5 min +1 s).
+    - `Key_with_path_traversal_returns_403_FORBIDDEN` (`../../etc/passwd`, URL-encoded too).
+    - `Unknown_container_returns_403_FORBIDDEN`.
+    - `Signed_url_for_deleted_file_returns_404_NOT_FOUND`.
   - `Upload_heic_is_accepted_and_converted_to_jpeg` (Review Focus 4).
   - `Upload_pdf_renamed_jpg_returns_FILE_TYPE_NOT_ALLOWED`.
   - `Upload_6MB_returns_FILE_TOO_LARGE`.
   - `Me_requires_auth_401_UNAUTHENTICATED`.
 - [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement (Magick.NET-Q8-AnyCPU, Azure.Storage.Blobs).
+- [ ] **Step 3:** Implement (Magick.NET-Q8-AnyCPU, which ships linux-x64 and linux-arm64 native libraries; the ARM64 production VM depends on the latter).
 - [ ] **Step 4:** Run. Expected: PASS.
 - [ ] **Step 5:** Commit `feat(profile): profile and photo upload [FR-AUTH-02]`.
 
@@ -472,7 +495,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 ### Task 10: Email verification
 
 **Files:**
-- Create: `src/Gameya.Application/Users/{ChangeEmail.cs,ResendEmailVerification.cs,VerifyEmail.cs,VerifiedEmailResolver.cs}`, `Abstractions/IEmailSender.cs`, `src/Gameya.Infrastructure/Email/{SmtpEmailSender.cs,AcsEmailSender.cs}`, `EmailTemplates.cs`
+- Create: `src/Gameya.Application/Users/{ChangeEmail.cs,ResendEmailVerification.cs,VerifyEmail.cs,VerifiedEmailResolver.cs}`, `Abstractions/IEmailSender.cs`, `src/Gameya.Infrastructure/Email/SmtpEmailSender.cs`, `EmailTemplates.cs`
 - Test: `tests/Gameya.Api.IntegrationTests/Users/EmailVerificationTests.cs`, `tests/Gameya.Application.Tests/VerifiedEmailResolverTests.cs`
 
 **Interfaces:**
@@ -485,7 +508,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
     - `ResendEmailVerificationCommand` with `[RequiresAuth]`.
     - `VerifyEmailCommand(string Token)` with `[PublicAccess]`. Finds the user by `PendingEmailTokenHash`, else `EMAIL_TOKEN_INVALID`. If another non-deleted user already has `Email == pending`, throws `EMAIL_IN_USE`.
   - **Endpoints:** `PUT /api/me/email` → 202, `POST /api/me/email/resend` → 202, `POST /api/auth/email/verify {token}` → 204.
-  - **Senders:** `SmtpEmailSender` (MailKit, dev → Mailpit `localhost:1025`, tests → Testcontainers `axllent/mailpit`); `AcsEmailSender` (prod, `Email:Acs:ConnectionString`, `Email:From`). Selected by `Email:Provider` = `Smtp|Acs`.
+  - **Sender:** one `SmtpEmailSender` (MailKit) for every environment. Config `Email:Smtp:{Host,Port,Username,Password,UseStartTls}` and `Email:From`. Dev → Mailpit `localhost:1025` (no auth, no TLS). Tests → Testcontainers `axllent/mailpit`. Staging/prod → Brevo SMTP relay `smtp-relay.brevo.com:587` with STARTTLS (free ~300 emails/day), sending from a verified single sender until a domain with SPF/DKIM exists. Outside Development/E2E, startup fails if `UseStartTls` is false.
 
 - [ ] **Step 1: Write failing tests:**
   - `Change_email_sends_link_and_resolver_returns_null_until_verified` (**AC-F4**): read the Mailpit API `/api/v1/messages`, extract the token, verify → 204, then the resolver returns the email and the log has `EMAIL_VERIFIED`.
@@ -510,7 +533,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 **Interfaces:**
 - Produces:
   - `IActiveParticipationChecker.HasRecruitingOrActiveGameyasAsync(Guid userId, CancellationToken) → Task<bool>`. `NoParticipationChecker` returns `false`. **Sub-project 2 replaces it.**
-  - `DeleteAccountCommand` with `[RequiresAuth]`. If the checker returns true → `ACCOUNT_HAS_ACTIVE_GAMEYAS`. Otherwise revokes all tokens, deletes the photo blob, and calls `user.Delete(now)`. The endpoint `DELETE /api/me` → 204 and clears the cookie.
+  - `DeleteAccountCommand` with `[RequiresAuth]`. If the checker returns true → `ACCOUNT_HAS_ACTIVE_GAMEYAS`. Otherwise revokes all tokens, deletes the photo file, and calls `user.Delete(now)`. The endpoint `DELETE /api/me` → 204 and clears the cookie.
   - `readonly record struct DisplayPhone` with an internal constructor, serialized as a string by a JSON converter. `static class PhoneDisplay { DisplayPhone For(Guid viewerId, Guid subjectId, PhoneNumber phone, bool viewerOrganizesSubjectsGameya) }` returns `E164` when the viewer is the subject or `viewerOrganizesSubjectsGameya`, else `Masked`.
   - **Client display rule:** deleted users are returned with `fullName = null, isDeleted = true`, and the client shows the translation `common.deletedUser`.
 
@@ -536,16 +559,18 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 
 **Interfaces:**
 - Produces:
-  - `GET /health` → 200 JSON with entries `postgres`, `blob`, `hangfire`.
+  - `GET /health` → 200 JSON with entries `postgres`, `files` (root path exists and is writable), `hangfire`.
   - The Hangfire server runs in-process on schema `hangfire`. The dashboard `/hangfire` is mapped **only in Development** in Foundation. The `PlatformAdmin`-guarded production dashboard ships with the admin UI in sub-project 5, because it needs a cookie-based admin session that doesn't exist yet.
   - Serilog with request logging, a correlation id (`X-Correlation-Id`, generated when absent, echoed in the response and in ProblemDetails `traceId`), and an enricher that masks any `+20\d{10}` in messages to the `Masked` form and drops properties named `code|token|refreshToken|email`.
-  - OpenTelemetry → Azure Monitor when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set.
+  - Serilog writes compact JSON to stdout. Docker's `json-file` log driver rotates it (`max-size: 10m`, `max-file: 5`).
+  - OpenTelemetry traces and metrics use the OTLP exporter only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (for example Grafana Cloud free). Otherwise nothing is exported.
   - `docker-compose.yml` services:
     - `postgres` (17, mounts `docker/postgres/init.sql`)
-    - `azurite`
     - `mailpit` (1025/8025)
-    - `api` (build `src/Gameya.Api/Dockerfile`, env `ASPNETCORE_ENVIRONMENT=Development`, port 8080, runs migrations via `dotnet Gameya.Api.dll --migrate`; the flag exists only for local compose and is refused outside Development)
-  - Dockerfile: multi-stage, `mcr.microsoft.com/dotnet/aspnet:10.0` (Debian, includes tzdata), non-root user.
+    - `api` (build `src/Gameya.Api/Dockerfile`, env `ASPNETCORE_ENVIRONMENT=Development`, port 8080, `Storage__RootPath=/data/files` on a named volume, runs migrations via `dotnet Gameya.Api.dll --migrate`; the flag exists only for local compose and is refused outside Development)
+  - **Dockerfile:** multi-stage and multi-arch without emulation.
+    - Build stage: `FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0`, then `dotnet publish -a $TARGETARCH`.
+    - Final stage: `mcr.microsoft.com/dotnet/aspnet:10.0` (Debian, includes tzdata), `USER $APP_UID`, and no `RUN` steps, so `docker buildx build --platform linux/arm64` works on an x64 runner without QEMU.
 
 - [ ] **Step 1: Write failing tests:**
   - `Health_reports_healthy_with_three_checks`.
@@ -684,7 +709,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
   - **`frontend`:** Node 22, then `npm ci` (root and web), `npm --prefix src/gameya-web run lint`, `npx stylelint`, `node tools/check-i18n.mjs`, `npm --prefix src/gameya-web test -- --watch=false`, `ng build --configuration production`.
   - **`e2e`** (needs backend and frontend): `docker compose up -d --wait`, `ng serve` in the background, `npx playwright install --with-deps chromium`, `npx playwright test`. Uploads the report on failure.
   - **`commits`** (PR only): `npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}`.
-  - **`image`:** `docker build`, then a Trivy scan with `severity: CRITICAL,HIGH`, `exit-code: 1`, `ignore-unfixed: true`.
+  - **`image`:** `docker build` (amd64), then a Trivy scan with `severity: CRITICAL,HIGH`, `exit-code: 1`, `ignore-unfixed: true`. Also `docker buildx build --platform linux/arm64` (no push) to prove the production architecture builds.
 - **Branch protection** (document in the PR description, owner applies): all five jobs required on `main`.
 
 - [ ] **Step 1:** Write the workflow.
@@ -694,49 +719,106 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 
 ---
 
-### Task 17: Azure infrastructure and deploy pipeline
+### Task 17: Free-tier infrastructure and deploy pipeline
 
 **Files:**
 - Create:
-  - `infra/main.bicep`, `infra/main.staging.bicepparam`, `infra/main.prod.bicepparam`
-  - `infra/modules/{postgres.bicep,appservice.bicep,staticweb.bicep,storage.bicep,keyvault.bicep,acr.bicep,email.bicep,monitoring.bicep}`
+  - `infra/compose.prod.yml`, `infra/Caddyfile`
+  - `infra/bootstrap-vm.sh`, `infra/deploy-release.sh`, `infra/backup.sh`, `infra/restore.sh`, `infra/gameya-backup.service`, `infra/gameya-backup.timer`
   - `.github/workflows/deploy.yml`
-  - `src/gameya-web/staticwebapp.config.json`
   - `docs/deployment.md`
+- Test: `tests/Gameya.Api.IntegrationTests/Ops/StartupGuardTests.cs`
+
+**Target:** one Oracle Cloud Always Free Ampere A1 VM per environment (2 OCPU / 12 GB, Ubuntu 24.04 aarch64). Hosting cost is $0.
 
 **Interfaces:**
-- **Bicep parameters:** `environmentName` (`staging|prod`), `location` (default `uaenorth`), `postgresSku` (staging `Standard_B1ms`, prod `Standard_B2s`).
-- **Bicep outputs:** `apiAppName`, `swaName`, `acrLoginServer`, `postgresFqdn`, `keyVaultName`.
-- **Resources:**
-  - **PostgreSQL** Flexible Server 17: `backup.backupRetentionDays: 35`, public access with a firewall rule allowing Azure services, `geoRedundantBackup` Enabled in prod.
-  - **App Service:** Linux plan (staging B1, prod P0v3), container from ACR via system-assigned managed identity (`AcrPull`), slot `staging`, health check path `/health`.
-  - **Key Vault:** RBAC, app identity has `Key Vault Secrets User`. Secrets `ConnectionStrings--App`, `Jwt--SigningKey`, `Security--HashKey`, `Email--Acs--ConnectionString`, `Sms--ApiKey`, `MediatR--LicenseKey`, and the DB admin and role passwords. App settings use `@Microsoft.KeyVault(...)` references.
-  - **Storage** with a private `profile-photos` container.
-  - **ACS Email** with an Azure-managed domain until the custom domain exists.
-  - **Application Insights** (workspace-based).
-  - **Static Web Apps:** Standard tier with a **linked backend** to the App Service, so `/api/*` is same-origin and the `SameSite=Strict` cookie works without a custom domain. This replaces the spec's "shared parent domain" requirement, which needs a domain that is still an open item.
+- **VM layout (`/opt/gameya`):** `.env` (mode 600, written by deploy), `image.env` (`API_TAG=<sha>`), `compose.prod.yml`, `Caddyfile`, `deploy-release.sh`, `backup.sh`, `restore.sh`, and `releases/<sha>/{web/,efbundle,roles.sql}`. `releases/current` is a **relative** symlink to the live `<sha>`, so it resolves inside the Caddy bind mount. Releases and images beyond the newest 3 are pruned.
+- **`compose.prod.yml`** (project name `gameya`; every service uses `restart: unless-stopped` and `json-file` logging with `max-size: 10m`, `max-file: 5`):
+  - **`postgres`:** `postgres:17`, volume `pgdata`, no published ports, healthcheck `pg_isready`. `POSTGRES_PASSWORD` comes from `.env`.
+  - **`api`:** image `gameya-api:${API_TAG}`, `ASPNETCORE_ENVIRONMENT=Staging|Production`, volume `files` at `/data/files`, and config from `.env` (`ConnectionStrings__App` as `gameya_app`, `Jwt__SigningKey`, `Security__HashKey`, `Storage__RootPath=/data/files`, `Storage__UrlSigningKey`, `Email__Smtp__*`, `Email__From`, `Sms__Provider`, `Sms__SmsGate__*` or `Sms__ApiKey`, `MediatR__LicenseKey`, `App__WebBaseUrl=https://${SITE_ADDRESS}`, optional `OTEL_EXPORTER_OTLP_*`). No published ports.
+  - **`caddy`:** `caddy:2`, ports 80/443, volumes `caddy_data` and `caddy_config`, `./Caddyfile:/etc/caddy/Caddyfile:ro`, `./releases:/srv/releases:ro`, env `SITE_ADDRESS`.
+- **`Caddyfile`:**
+  - Site `{$SITE_ADDRESS}` gets automatic Let's Encrypt TLS.
+  - `encode zstd gzip`.
+  - `/api/*`, `/health`, and `/hubs/*` (SignalR, from sub-project 2) → `reverse_proxy api:8080`. `/hangfire` is not proxied.
+  - Everything else is served from `root /srv/releases/current/web`, with `try_files {path} /index.html` and `file_server`.
+  - Hashed assets get `Cache-Control: public, max-age=31536000, immutable`. `index.html` gets `no-cache`.
+  - Headers: HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `-Server`, and CSP `default-src 'self'; font-src https://fonts.gstatic.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; img-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`.
+- **Client IPs (rate limiting depends on them):** the API enables `ForwardedHeaders` (`XForwardedFor | XForwardedProto`) and trusts only the compose network. When Cloudflare is turned on later, Caddy sets `trusted_proxies` to Cloudflare's IP ranges and `client_ip_headers CF-Connecting-IP`. Both are documented in `docs/deployment.md`.
+- **`deploy-release.sh <sha>`** (runs on the VM as `deploy`, idempotent, `set -euo pipefail`; `GAMEYA_ROOT` overrides `/opt/gameya` for the local rehearsal):
+  1. Expects the image `gameya-api:<sha>` to be loaded already and `releases/<sha>/` to be uploaded.
+  2. `docker compose up -d --wait postgres caddy`.
+  3. Applies `roles.sql` with `docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 -v migrator_password=... -v app_password=...`.
+  4. Runs the self-contained linux-arm64 `efbundle` inside `mcr.microsoft.com/dotnet/runtime-deps:10.0` on the `gameya_default` network, connecting as `gameya_migrator`.
+  5. Saves the current `API_TAG` and `current` target. Writes the new `API_TAG`, runs `docker compose up -d api`, and switches `current` → `<sha>`.
+  6. Polls `curl -fsS --resolve "$SITE_ADDRESS:443:127.0.0.1" "https://$SITE_ADDRESS/health"` for up to 5 minutes until the body contains `Healthy`.
+  7. **On failure:** restores the previous `API_TAG` and `current`, runs `docker compose up -d api`, and exits 1. Migrations are not rolled back, so every migration must stay compatible with the previous release (expand/contract).
+  8. Prunes old releases and images.
+- **`backup.sh`** (systemd `gameya-backup.timer`, daily at 01:30 UTC with `Persistent=true`):
+  - Runs `pg_dump -Fc` through `docker compose exec -T postgres`.
+  - Archives the `files` volume with a throwaway container that mounts it read-only.
+  - Uploads both to `b2:$B2_BUCKET/{db,files}/` with rclone (configured through `RCLONE_CONFIG_B2_*` env vars, no config file).
+  - Keeps 3 days locally. Pings `BACKUP_PING_URL` (for example healthchecks.io free) on success, if set.
+  - A B2 lifecycle rule on the bucket enforces 35-day retention.
+- **`restore.sh [latest|<timestamp>] [--verify-only]`:**
+  - `--verify-only` restores into a throwaway `postgres:17` container and checks that `__EFMigrationsHistory` and `users` are readable. It never touches live data.
+  - Without the flag, it stops `api`, runs `pg_restore --clean --if-exists`, restores files, and starts `api`.
+- **`bootstrap-vm.sh`** (owner runs it once as root; idempotent):
+  - Installs Docker Engine + the compose plugin, rclone, and unattended-upgrades.
+  - Creates the `deploy` user (in the `docker` group) with the given public key.
+  - Sets `PasswordAuthentication no` and `PermitRootLogin no`.
+  - Opens 80/443 in the image's iptables rules (Oracle Ubuntu images block them by default) and persists them.
+  - Creates `/opt/gameya` and installs the backup timer.
 - **`deploy.yml`:**
-  - **Triggers:** `push` to `main` → environment `staging`. `push` of tag `v*` → environment `production` (GitHub Environment with required reviewer).
-  - `permissions: id-token: write`. `azure/login` with OIDC (secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`).
+  - **Triggers:** `push` to `main` → environment `staging`. `push` of tag `v*` → environment `production` (GitHub Environment with required reviewer). `concurrency: deploy-${{ environment }}`, no cancel-in-progress.
+  - **Secrets (per GitHub Environment):** `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` (pinned host key; never `StrictHostKeyChecking=no`), `SITE_ADDRESS`, `POSTGRES_PASSWORD`, `DB_MIGRATOR_PASSWORD`, `DB_APP_PASSWORD`, `JWT_SIGNING_KEY`, `SECURITY_HASH_KEY`, `STORAGE_URL_SIGNING_KEY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_FROM`, `SMS_PROVIDER`, `SMSGATE_USERNAME`, `SMSGATE_PASSWORD` (or `SMS_API_KEY` for a paid provider), optional `SMSGATE_BASE_URL`, `MEDIATR_LICENSE_KEY`, `B2_KEY_ID`, `B2_APP_KEY`, `B2_BUCKET`. Optional: `BACKUP_PING_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`.
   - **Steps:**
-    1. `az deployment group create` with the env's bicepparam.
-    2. Build and push the image `gameya-api:${{ github.sha }}` to ACR.
-    3. Add a temporary firewall rule for the runner IP (`curl -s ifconfig.me`).
-    4. Run `psql` with `infra/sql/roles.sql` as admin (passwords from Key Vault via `az keyvault secret show`).
-    5. `dotnet ef migrations bundle -p src/Gameya.Infrastructure -s src/Gameya.Api -r linux-x64 --self-contained -o efbundle`, then `./efbundle --connection "<migrator conn>"`.
-    6. Remove the firewall rule in an `if: always()` step.
-    7. Set the slot container image.
-    8. Poll `https://<app>-staging.azurewebsites.net/health` up to 5 minutes for `Healthy`.
-    9. `az webapp deployment slot swap`.
-    10. `ng build --configuration production`, then `Azure/static-web-apps-deploy` with `skip_app_build: true`.
-- **`staticwebapp.config.json`:** `navigationFallback` → `/index.html` excluding `/api/*`, plus security headers (CSP `default-src 'self'; font-src https://fonts.gstatic.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; img-src 'self' blob: https://*.blob.core.windows.net`).
-- **`docs/deployment.md`:** one-time owner steps: create the Entra app registration with a federated credential per environment, set the three GitHub secrets, create GitHub Environments `staging`/`production` with a reviewer on production, seed Key Vault secrets, and choose the SMS provider (Cequens or SMS Misr) and set `Sms:Provider`. The production SMS adapter `ProviderSmsSender` is implemented against the chosen provider's HTTP API in a follow-up task once the contract exists. Until then, staging uses `LoggingSmsSender` behind `Sms:Provider=Logging`, and production deploy refuses to start with `Logging` (startup check).
+    1. `docker buildx build --platform linux/arm64 -t gameya-api:${{ github.sha }} -o type=docker,dest=image.tar`, then gzip.
+    2. `dotnet ef migrations bundle -p src/Gameya.Infrastructure -s src/Gameya.Api -r linux-arm64 --self-contained -o efbundle`.
+    3. `ng build --configuration production`.
+    4. Set up SSH from the secrets.
+    5. `rsync` the web build, `efbundle`, and `infra/sql/roles.sql` to `releases/<sha>/`, and the `infra/` runtime files to `/opt/gameya/`.
+    6. `gunzip -c image.tar.gz | ssh … docker load`.
+    7. Write `.env` by piping the secrets through stdin (`ssh … 'umask 077; cat > /opt/gameya/.env'`), so no secret appears on a command line or in logs.
+    8. `ssh … /opt/gameya/deploy-release.sh <sha>`. Its exit code is the job result.
 
-- [ ] **Step 1:** Write the Bicep. Validate with `az bicep build --file infra/main.bicep`. Expected: no errors, no warnings.
-- [ ] **Step 2:** Write the startup check test in `tests/Gameya.Api.IntegrationTests/Ops/StartupGuardTests.cs`: `Production_with_Logging_sms_provider_fails_to_start` (factory with environment `Production`, `Sms:Provider=Logging` → host build throws `InvalidOperationException` whose message contains `Sms:Provider`). Run it and expect FAIL, implement it, run again and expect PASS.
-- [ ] **Step 3:** Write `deploy.yml` and validate it with actionlint.
-- [ ] **Step 4: AC-F8 (requires the owner's Azure setup from `docs/deployment.md`).** Merge to `main`. Expected: the workflow is green, `/health` on staging returns Healthy, and the `__EFMigrationsHistory` table lists `Initial`. If Azure access isn't set up yet, stop here and report that AC-F8 is pending the owner's one-time setup. Do not claim it passes.
-- [ ] **Step 5:** Commit `ci(deploy): Azure infrastructure as Bicep and gated deploy pipeline`.
+- [ ] **Step 1:** Write `compose.prod.yml`, the `Caddyfile`, and the scripts. Validate:
+  - `shellcheck infra/*.sh`
+  - `docker compose -f infra/compose.prod.yml --env-file <sample env> config`
+  - `docker run --rm -e SITE_ADDRESS=localhost -v ./infra/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2 caddy validate --config /etc/caddy/Caddyfile`
+  - Expected: no errors.
+- [ ] **Step 2:** Write the startup guard tests in `StartupGuardTests.cs`:
+  - `Production_with_Logging_sms_provider_fails_to_start` (factory with environment `Production`, `Sms:Provider=Logging` → host build throws `InvalidOperationException` whose message contains `Sms:Provider`).
+  - `Production_without_url_signing_key_fails_to_start`.
+  - `Production_smtp_without_starttls_fails_to_start`.
+  - Run them and expect FAIL, implement, then run again and expect PASS.
+- [ ] **Step 3: Local rehearsal** (Linux or WSL with Docker):
+  - Set `GAMEYA_ROOT` to a temp directory and `SITE_ADDRESS=localhost` (Caddy's internal CA; curl with `-k` in rehearsal mode only). Build an amd64 image and an amd64 `efbundle`.
+  - Run `deploy-release.sh <sha1>`. Expected: Healthy.
+  - Tag a broken image (`busybox` with a `sleep infinity` entrypoint) as `gameya-api:<sha2>` and run `deploy-release.sh <sha2>`. Expected: exit 1, then `/health` is Healthy again on `<sha1>` (rollback proven).
+  - Run `backup.sh` with an rclone `local` remote standing in for B2, then `restore.sh latest --verify-only`. Expected: PASS.
+- [ ] **Step 4:** Write `deploy.yml` and validate it with actionlint.
+- [ ] **Step 5:** Write `docs/deployment.md` with the owner's one-time steps:
+  1. Create the Oracle Cloud account. A card is needed for identity verification only. The home region can't be changed later, so pick it with the legal open item in mind.
+  2. Create two A1 VMs (staging, prod). If you get "out of host capacity", retry later or in another availability domain. Allow 80/443 in the VCN security list.
+  3. Run `bootstrap-vm.sh` on each VM.
+  4. Create a free DuckDNS subdomain per environment that points at the VM's public IP.
+  5. Create a Brevo account and verify the sender.
+  6. Create a Backblaze B2 bucket per environment with a 35-day lifecycle rule, and an application key limited to that bucket.
+  7. Create the GitHub Environments `staging`/`production` (with a reviewer on production) and set the secrets above.
+  8. Optional: an UptimeRobot monitor on `/health`, and a healthchecks.io check for backups.
+  9. **SMS:**
+     - **Staging** may use `Logging` (read codes with `docker compose logs api`) or `SmsGate`.
+     - **Demo/pilot production** uses `SmsGate`. Setup: install SMS Gate on a spare Android phone with a SIM that has an SMS bundle, enable cloud mode (or point it at a self-hosted server), turn on end-to-end encryption if available, copy the username/password into the GitHub secrets, raise Android's SMS send limit with `adb shell settings put global sms_outgoing_check_max_count <n>`, and keep the phone charging on Wi-Fi.
+     - **Before public launch**, switch to a paid provider (Cequens or SMS Misr). Its adapter `ProviderSmsSender` is implemented in a follow-up task once the contract exists.
+     - Production refuses to start with `Logging`.
+  10. **Later, when a domain is bought:** Cloudflare DNS with the proxy on and SSL "Full (strict)", a Cloudflare Origin CA certificate in Caddy, 80/443 limited to Cloudflare IP ranges, Caddy `trusted_proxies`/`client_ip_headers`, and SPF/DKIM for the Brevo sender domain.
+- [ ] **Step 6: AC-F8 (requires the owner's setup from `docs/deployment.md`).**
+  - Merge to `main`. Expected: the workflow is green, `https://<staging-host>/health` returns Healthy, and `__EFMigrationsHistory` lists `Initial`.
+  - Upload a HEIC photo on staging (OTP from `docker compose logs api`) to confirm Magick.NET works on ARM64.
+  - Run `systemctl start gameya-backup` and `restore.sh latest --verify-only` on staging. Expected: PASS.
+  - If the VM setup isn't done yet, stop here and report that AC-F8 is pending the owner's one-time setup. Do not claim it passes.
+- [ ] **Step 7:** Commit `ci(deploy): free-tier VM deploy with Caddy, rollback and off-site backups`.
 
 ---
 
@@ -756,6 +838,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 
 **Deviations from the spec**, all listed for owner review:
 1. Minimal-API endpoint groups instead of controllers.
-2. A Static Web Apps linked backend instead of a shared parent domain.
+2. One origin (Caddy serves the SPA and proxies `/api`) instead of a shared parent domain.
 3. The Hangfire dashboard is Development-only until sub-project 5.
-4. The production SMS adapter is deferred until a provider contract exists, and production refuses to start without one.
+4. SMS runs in stages: `Logging` in dev, the `SmsGate` Android phone gateway for demos, and a paid provider adapter (deferred until a contract exists) before public launch. Production refuses to start with `Logging`.
+5. Free-tier hosting (Oracle Always Free VM + Docker Compose) instead of Azure. Deploys restart the API in place (a few seconds of downtime, with automatic rollback) instead of a slot swap. Database backups are nightly dumps to B2 (35 days) instead of point-in-time restore.

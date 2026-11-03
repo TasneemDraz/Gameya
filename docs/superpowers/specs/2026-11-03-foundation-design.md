@@ -12,7 +12,7 @@ Gam'eya is a mobile-first, Arabic/English web app for managing Egyptian rotating
 
 v1 is built as five sequential sub-projects, each with its own spec, plan, and implementation cycle:
 
-1. **Foundation** (this document): solution skeleton, i18n/RTL shell, phone OTP auth and profile, activity log infrastructure, developer workflow, CI/CD and Azure deployment.
+1. **Foundation** (this document): solution skeleton, i18n/RTL shell, phone OTP auth and profile, activity log infrastructure, developer workflow, CI/CD and free-tier deployment.
 2. **Gam'eya setup:** create and edit gam'eyas, Draft → Recruiting, invites and joining, members, payout order (manual, auditable random draw, by request).
 3. **Running a gam'eya:** start, rounds and contributions, payment submission and confirmation with proofs, payouts and disputes, overdue and auto-close jobs, completion and cancellation.
 4. **Coordination:** notification engine (in-app and email, extensible channels), reminders, swaps, announcements.
@@ -42,18 +42,19 @@ v1 is built as five sequential sub-projects, each with its own spec, plan, and i
 | Architecture | Modular monolith: Clean Architecture layers, feature folders per module inside each layer |
 | Backend | ASP.NET Core (current LTS), MediatR (CQRS), FluentValidation, EF Core |
 | Data access | Specification pattern (Ardalis.Specification). Named specs for every lookup and DTO projection (`Query.Select`, translated to SQL). No mapping libraries (no AutoMapper) |
-| Database | PostgreSQL: Azure Database for PostgreSQL Flexible Server, Npgsql provider |
+| Database | PostgreSQL 17 in a Docker container on the app VM (volume-backed, not exposed to the internet), Npgsql provider |
 | Money | `numeric(18,2)` in DB, `decimal` in code, currency code stored alongside |
 | Time | All timestamps UTC `timestamptz`. Business dates computed in `Africa/Cairo` via `IClock` + `CairoCalendar` |
 | Background jobs | Hangfire with `Hangfire.PostgreSql`, same database server, running in the API process |
-| File storage | Azure Blob Storage, private containers, short-lived (~5 min) SAS URLs |
+| File storage | `IFileStore` on a local Docker volume. Files are served by the API through short-lived (~5 min) HMAC-signed URLs. An S3-compatible store can replace it later without touching handlers |
+| Backups | Nightly `pg_dump` plus the file volume, pushed off-site to Backblaze B2 (free 10 GB) with 35-day retention. A restore script is tested |
 | Real-time | SignalR, running inside the API (needed from sub-project 2) |
-| SMS (OTP) | `ISmsSender`. Dev: logging sender. Prod: Egyptian provider adapter (Cequens or SMS Misr, chosen at production setup), Twilio Verify as fallback |
-| Email | Azure Communication Services Email behind `IEmailSender` |
+| SMS (OTP) | `ISmsSender`, selected by `Sms:Provider`, in three stages: **(1) Dev/test:** `Logging` writes the code to the log ($0). **(2) Demo/pilot:** `SmsGate`, an Android phone running the open-source SMS Gate app with the owner's SIM, called over HTTP (costs only the SIM's SMS bundle). **(3) Public launch:** a paid provider adapter (Cequens or SMS Misr, Twilio as fallback) or WhatsApp authentication messages to cut cost. Only the adapter changes between stages |
+| Email | SMTP (MailKit) behind `IEmailSender`. Dev: Mailpit. Prod: Brevo free SMTP relay (~300/day), verified single sender until a domain exists |
 | Frontend | Angular (latest stable at scaffold time), standalone components, signals, Angular Material + CDK, Transloco |
-| Hosting | API: Azure App Service (Linux container). Web: Azure Static Web Apps. Region: UAE North |
-| IaC / CI | Bicep, GitHub Actions, GitHub OIDC to Azure |
-| Observability | Serilog + OpenTelemetry → Application Insights |
+| Hosting | Oracle Cloud Always Free: one Ampere A1 (ARM64) VM per environment (staging, prod), 2 OCPU / 12 GB each, Ubuntu + Docker Compose. Caddy serves the Angular build and proxies `/api` on the same origin, with automatic Let's Encrypt TLS. Hostname: free DuckDNS subdomain until a domain is bought, then Cloudflare (free plan) in front |
+| IaC / CI | Docker Compose + shell scripts in `infra/`, GitHub Actions, deploy over SSH. Secrets in GitHub Environments |
+| Observability | Serilog JSON to stdout (Docker log rotation) + OpenTelemetry OTLP exporter, enabled when an endpoint is configured (for example Grafana Cloud free). Free external uptime check on `/health` |
 
 ## 4. Design
 
@@ -66,15 +67,15 @@ Gameya/
 ├─ src/
 │  ├─ Gameya.Domain/             entities, value objects, domain rules, domain events (no dependencies)
 │  ├─ Gameya.Application/        commands/queries, validators, pipeline behaviors, ports (ISmsSender, IEmailSender, IClock, IFileStore…)
-│  ├─ Gameya.Infrastructure/     EF Core/Npgsql, Hangfire, Blob, SMS/email adapters, JWT/token services
+│  ├─ Gameya.Infrastructure/     EF Core/Npgsql, Hangfire, file store, SMS/email adapters, JWT/token services
 │  ├─ Gameya.Api/                controllers, auth setup, ProblemDetails mapping, SignalR hubs, health checks
 │  └─ gameya-web/                Angular app
 ├─ tests/
 │  ├─ Gameya.Domain.Tests/
 │  ├─ Gameya.Application.Tests/
 │  └─ Gameya.Api.IntegrationTests/   WebApplicationFactory + Testcontainers PostgreSQL
-├─ infra/                        Bicep templates
-├─ docker-compose.yml            api, postgres, azurite, mailpit
+├─ infra/                        production compose, Caddyfile, VM bootstrap, backup/restore scripts, SQL roles
+├─ docker-compose.yml            api, postgres, mailpit (local dev)
 └─ .github/workflows/
 ```
 
@@ -107,10 +108,12 @@ Gameya/
 - Resend allowed only 60 s after the previous send. Max 3 resends per 15-minute window.
 - ASP.NET rate limiter also applies per-IP limits on `/auth/otp/*`.
 - Dev environment: `LoggingSmsSender` writes the code to the log.
+- Demo/pilot: `SmsGateSmsSender` sends through the Android phone gateway.
+- If the SMS can't be sent, the request fails with `SMS_SEND_FAILED` (503). The transaction rolls back, so the failed attempt doesn't count against the user's resend limit.
 
 **Tokens (FR-AUTH-03):**
 - **Access token:** JWT, 10-minute lifetime, kept in memory in the Angular app only. Claims: user id, roles, preferred language.
-- **Refresh token:** 256-bit random value, stored hashed with a family id. Sent as an `HttpOnly; Secure; SameSite=Strict` cookie scoped to the API path. API and web share a parent domain (`api.<domain>`, `app.<domain>`).
+- **Refresh token:** 256-bit random value, stored hashed with a family id. Sent as an `HttpOnly; Secure; SameSite=Strict` cookie scoped to the API path. The web app and API are served from one origin (Caddy routes `/api` to the API), so no shared parent domain is needed.
 - **Rotation:** every refresh issues a new refresh token and revokes the old one. Reuse of a revoked token revokes the whole family (theft detection).
 - **Expiry:** sliding 30 days of inactivity. Each refresh extends it.
 - **Log out:** revokes the current family. **Log out everywhere:** revokes all of the user's refresh tokens.
@@ -118,7 +121,7 @@ Gameya/
 
 ### 4.3 Profile, email verification, deletion, privacy
 
-**Profile (FR-AUTH-02):** full name (2–60 chars, required), verified phone, optional email, optional photo, preferred language (`ar` default, `en`). Photos: JPG/PNG/HEIC, max 5 MB, resized server-side to 512 px, stored in a private Blob container and served through short-lived SAS URLs.
+**Profile (FR-AUTH-02):** full name (2–60 chars, required), verified phone, optional email, optional photo, preferred language (`ar` default, `en`). Photos: JPG/PNG/HEIC, max 5 MB, resized server-side to 512 px, stored in the private file store and served through short-lived signed URLs.
 
 **Email verification (added requirement, approved):**
 - Setting or changing an email stores it as **unverified** and sends a verification link (single-use token, stored hashed, valid 24 hours).
@@ -179,11 +182,20 @@ Gameya/
 ### 4.7 Environments, CI/CD, deployment
 
 **Environments:**
-- **Local:** `docker compose up` (API, Postgres, Azurite, Mailpit) plus `ng serve` with a proxy.
+- **Local:** `docker compose up` (API, Postgres, Mailpit) plus `ng serve` with a proxy.
 - **Staging:** auto-deploy on merge to `main`.
 - **Production:** deploy from a release tag with manual approval (GitHub Environments).
 
-**Azure (Bicep in `infra/`):** App Service (Linux, with a staging slot), PostgreSQL Flexible Server (point-in-time restore retention 35 days), Storage account (Blob), Static Web Apps, Communication Services Email, Key Vault, Container Registry, Application Insights. Region: UAE North. The app reads secrets from Key Vault via managed identity. GitHub authenticates to Azure via OIDC (no stored credentials).
+**Hosting cost: $0.** Everything runs on free tiers. The only costs are SMS for OTP (the SIM's SMS bundle during the demo stage, a paid provider at public launch) and, optionally, a domain name (~$10/year).
+
+**Each environment's VM (Oracle Cloud Always Free, `infra/`):**
+- Docker Compose services: `caddy` (TLS, static Angular files, reverse proxy for `/api` and `/health`), `api` (with in-process Hangfire), `postgres` (port not published).
+- Volumes: `pgdata`, `files`, `caddy_data`.
+- A host systemd timer runs `infra/backup.sh` nightly. It pushes `pg_dump -Fc` and a `files` archive to a Backblaze B2 bucket per environment, and a B2 lifecycle rule keeps 35 days.
+- Hardening: only ports 22/80/443 open, SSH key-only login with a non-root `deploy` user, unattended security upgrades.
+- Region: the Oracle home region chosen at sign-up (for example Dubai or Jeddah). It can't be changed later for Always Free resources.
+- Secrets live in GitHub Environment secrets. The deploy job writes them to `/opt/gameya/.env` (mode 600) on the VM.
+- **When a domain exists:** move DNS to Cloudflare (free), turn on the proxy with SSL "Full (strict)", give Caddy a Cloudflare Origin CA certificate, and allow 80/443 only from Cloudflare IP ranges. Only the site address and certificate settings change.
 
 **CI (every PR):**
 1. Backend: restore, build, `dotnet format --verify-no-changes`, domain + application tests.
@@ -194,17 +206,16 @@ Gameya/
 
 Any failure blocks the merge.
 
-**Deploy:**
-1. Push the image.
-2. Run the EF Core migration bundle as its own step, under the migration role. The app never migrates on startup.
-3. Deploy to the staging slot.
-4. Check `/health`.
-5. Swap the slot.
-6. Deploy the Angular app.
+**Deploy (GitHub Actions over SSH):**
+1. Build the ARM64 API image (cross-compiled, no emulation), the ARM64 EF Core migration bundle, and the Angular production build.
+2. Copy them to a new release folder on the VM, then `docker load` the image. No container registry is needed.
+3. Apply SQL roles, then run the migration bundle as its own step under the migration role. The app never migrates on startup. Migrations must stay compatible with the previous release so a rollback works.
+4. Restart `api` on the new image and point the web root at the new release. This means a few seconds of downtime, with no slot swap.
+5. Poll `/health`. If it isn't healthy within 5 minutes, roll back to the previous image and web release, then fail the job.
 
 **Operations:**
-- Serilog structured logs and OpenTelemetry traces to Application Insights, with a correlation id per request.
-- `/health` checks database, Blob, and Hangfire.
+- Serilog structured logs (stdout, rotated by Docker) with a correlation id per request. OpenTelemetry traces go to an OTLP endpoint when one is configured.
+- `/health` checks the database, the file store, and Hangfire.
 - The Hangfire dashboard is restricted to `PlatformAdmin`.
 - Phone numbers, OTP codes, tokens, and emails are never logged in clear text. Phones are masked.
 
@@ -229,6 +240,16 @@ Any failure blocks the merge.
 
 ## 7. Open items (not blocking implementation)
 
-- **Legal:** check Egypt's Personal Data Protection Law (Law 151/2020) on cross-border storage (hosting in UAE North) before public launch. The region is a Bicep parameter and can change.
-- **SMS provider contract:** choose between Cequens and SMS Misr, and register a sender ID, before production. Only the adapter depends on this.
-- **Domain name:** needed for the shared-parent-domain cookie setup in staging and production.
+- **Legal:** check Egypt's Personal Data Protection Law (Law 151/2020) on cross-border storage (data hosted in the Oracle home region, and backups in Backblaze B2's region) before public launch.
+- **SMS for public launch:** before opening to the public, switch from the phone gateway to a paid provider (Cequens or SMS Misr, with a registered sender ID) or WhatsApp authentication messages. Only the adapter depends on this.
+- **Phone gateway limits (demo stage):**
+  - Texts come from the owner's personal number, with no sender name.
+  - The phone must stay powered on and online.
+  - Android limits how many SMS an app can send (by default around 30 per 30 minutes; it can be raised with `adb`).
+  - The carrier may flag bulk sending.
+  - With SMS Gate's cloud relay, phone numbers and codes pass through a third-party server. Turn on the app's end-to-end encryption if available, or self-host the SMS Gate server on the VM.
+- **Domain name (optional, ~$10/year):** not required, since free DuckDNS hostnames work. A domain is needed for Cloudflare in front, a professional URL, and an email sender domain with SPF/DKIM.
+- **Free-tier risks:**
+  - Oracle may reclaim Always Free VMs it considers idle, and ARM capacity is sometimes unavailable at sign-up. Upgrading the account to Pay-As-You-Go keeps Always Free resources at $0 and removes idle reclamation, but it needs a card on file.
+  - A single VM per environment has no high availability. If it's lost, restore from B2 backups onto a new VM using `infra/bootstrap-vm.sh` and `infra/restore.sh`.
+  - Free-tier limits (Brevo daily sends, B2 storage) must be watched as usage grows.

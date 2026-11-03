@@ -524,6 +524,6 @@ Members can pay a round early, even while it is Upcoming.
 - Frontend: Angular, responsive, RTL support.
 - Background jobs for scheduled work (overdue processing, reminders, auto-close).
 - Unit tests with xUnit for domain rules (especially sections 6 and 7).
-- Docker, CI with GitHub Actions, deployment to Azure.
+- Docker, CI with GitHub Actions, deployment on free-tier hosting (no monthly hosting cost). SMS for OTP is the only cost: an Android phone gateway using the owner's SIM bundle for demos, and a paid provider or WhatsApp for public launch.
 
 Details beyond these (database choice, job library, file storage, SMS provider) are open for the implementation plan to propose.
