@@ -55,9 +55,22 @@ public class UserTests
         var e = u.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<ProfileUpdated>();
         e.Action.ShouldBe("PROFILE_UPDATED");
         var json = ActivityLogEntry.From(e, u.Id, "Member", T0).DetailsJson;
-        json.ShouldContain("\"old\"");
-        json.ShouldContain("\"fullName\":\"Mona Ali\"");
+        json.ShouldContain("\"changed\":[\"fullName\",\"language\"]");
+        json.ShouldContain("\"language\":{\"old\":\"Ar\",\"new\":\"En\"}");
+        json.ShouldNotContain("Mona");
         json.ShouldNotContain("010");
+    }
+
+    [Fact]
+    public void ProfileUpdated_details_for_a_name_only_change_hold_no_name_and_no_language()
+    {
+        var u = NewUser();
+        u.SetProfile("Mona Ali", Language.Ar, T0);
+        u.ClearDomainEvents();
+        u.SetProfile("Mona Hassan", Language.Ar, T0.AddMinutes(1));
+        var e = u.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<ProfileUpdated>();
+        var json = ActivityLogEntry.From(e, u.Id, "Member", T0).DetailsJson;
+        json.ShouldBe("{\"changed\":[\"fullName\"]}");
     }
 
     [Fact]

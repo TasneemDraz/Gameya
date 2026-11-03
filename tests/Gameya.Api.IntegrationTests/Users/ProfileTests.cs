@@ -113,6 +113,11 @@ public sealed class ProfileTests : IDisposable
 
         await using var ctx = _db.CreateAppContext();
         (await ctx.ActivityLog.CountAsync(a => a.Action == "PROFILE_UPDATED" && a.ActorUserId == userId)).ShouldBe(1);
+        var row = await ctx.ActivityLog.SingleAsync(a => a.Action == "PROFILE_UPDATED" && a.ActorUserId == userId);
+        row.DetailsJson.ShouldNotContain("Mona");
+        using var details = JsonDocument.Parse(row.DetailsJson);
+        details.RootElement.GetProperty("changed").EnumerateArray().Select(e => e.GetString())
+            .ShouldBe(["fullName", "language"]);
     }
 
     [Fact]
