@@ -13,7 +13,9 @@ public sealed class SmsGateSmsSenderTests
 {
     private static readonly SmsGateOptions Config = new()
     {
-        BaseUrl = "https://gate.example/3rdparty/v1", Username = "user", Password = "pass"
+        BaseUrl = "https://gate.example/3rdparty/v1",
+        Username = "user",
+        Password = "pass"
     };
 
     private static readonly PhoneNumber Phone = PhoneNumber.Parse("01012345678");
