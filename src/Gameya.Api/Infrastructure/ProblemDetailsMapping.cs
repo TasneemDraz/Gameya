@@ -48,7 +48,8 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
 
     public static int StatusFor(string code) => code switch
     {
-        ErrorCodes.UNAUTHENTICATED => StatusCodes.Status401Unauthorized,
+        ErrorCodes.UNAUTHENTICATED or ErrorCodes.REFRESH_TOKEN_INVALID or ErrorCodes.REFRESH_TOKEN_REUSED =>
+            StatusCodes.Status401Unauthorized,
         ErrorCodes.FORBIDDEN or ErrorCodes.USER_BLOCKED => StatusCodes.Status403Forbidden,
         ErrorCodes.NOT_FOUND => StatusCodes.Status404NotFound,
         ErrorCodes.OTP_LOCKED or ErrorCodes.OTP_RESEND_TOO_SOON or ErrorCodes.OTP_RESEND_LIMIT

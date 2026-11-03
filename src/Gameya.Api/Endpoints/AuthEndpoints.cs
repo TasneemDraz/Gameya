@@ -2,6 +2,7 @@ using Gameya.Api.Infrastructure;
 using Gameya.Application.Abstractions;
 using Gameya.Application.Auth;
 using Gameya.Domain.Auth;
+using Gameya.Domain.Common;
 using Gameya.Domain.Users;
 using MediatR;
 
@@ -9,8 +10,6 @@ namespace Gameya.Api.Endpoints;
 
 public static class AuthEndpoints
 {
-    public const string RefreshCookie = "gameya_rt";
-
     public sealed record RequestOtpBody(string? Phone, Language Language = Language.Ar);
 
     public sealed record VerifyOtpBody(string? Phone, string? Code);
@@ -31,16 +30,43 @@ public static class AuthEndpoints
             VerifyOtpBody body, ISender sender, IClock clock, HttpContext http, CancellationToken ct) =>
         {
             var session = await sender.Send(new VerifyOtpCommand(body.Phone ?? "", body.Code ?? ""), ct);
-            http.Response.Cookies.Append(RefreshCookie, session.RefreshToken, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.Strict,
-                Path = "/api/auth",
-                Expires = clock.UtcNow + RefreshToken.Lifetime,
-                IsEssential = true
-            });
+            RefreshCookie.Write(http.Response, session.RefreshToken, clock.UtcNow + RefreshToken.Lifetime);
             return Results.Ok(new { session.AccessToken, session.AccessTokenExpiresAt, session.ProfileComplete });
+        });
+
+        // Session endpoints are not OTP-SMS endpoints, so they sit outside the "otp" rate limit.
+        var session = app.MapGroup("/api/auth");
+
+        session.MapPost("/refresh", async (
+            ISender sender, IClock clock, HttpContext http, CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await sender.Send(new RefreshSessionCommand(RefreshCookie.Read(http.Request) ?? ""), ct);
+                RefreshCookie.Write(http.Response, result.RefreshToken, clock.UtcNow + RefreshToken.Lifetime);
+                return Results.Ok(new { result.AccessToken, result.AccessTokenExpiresAt, result.ProfileComplete });
+            }
+            catch (DomainException ex) when (ex.Code is ErrorCodes.REFRESH_TOKEN_INVALID or ErrorCodes.REFRESH_TOKEN_REUSED)
+            {
+                // Written here rather than thrown: the exception handler resets response headers,
+                // which would drop the cookie deletion.
+                RefreshCookie.Clear(http.Response);
+                await ProblemDetailsMapping.WriteAsync(http, ProblemDetailsMapping.StatusFor(ex.Code), ex.Code, ct: ct);
+                return Results.Empty;
+            }
+        });
+
+        session.MapPost("/logout", async (ISender sender, HttpContext http, CancellationToken ct) =>
+        {
+            await sender.Send(new LogoutCommand(RefreshCookie.Read(http.Request)), ct);
+            RefreshCookie.Clear(http.Response);
+            return Results.NoContent();
+        });
+
+        session.MapPost("/logout-all", async (ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new LogoutAllCommand(), ct);
+            return Results.NoContent();
         });
 
         return app;

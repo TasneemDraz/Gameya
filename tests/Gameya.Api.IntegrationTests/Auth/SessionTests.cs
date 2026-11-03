@@ -1,0 +1,216 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Gameya.Api.IntegrationTests.Infrastructure;
+using Gameya.Domain.Common;
+using Gameya.Domain.Users;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.JsonWebTokens;
+
+namespace Gameya.Api.IntegrationTests.Auth;
+
+[Collection(PostgresCollection.Name)]
+public sealed class SessionTests : IDisposable
+{
+    private const string CookiePrefix = "gameya_rt=";
+
+    private readonly PostgresFixture _db;
+    private readonly GameyaApiFactory _factory;
+    private readonly HttpClient _client;
+
+    public SessionTests(PostgresFixture db)
+    {
+        _db = db;
+        _factory = new GameyaApiFactory(db);
+        _client = _factory.CreateClient();
+    }
+
+    public void Dispose()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+    }
+
+    private sealed record Session(string Phone, string AccessToken, string RefreshToken);
+
+    private static string NewPhone() =>
+        "01" + "0125"[Random.Shared.Next(4)] + Random.Shared.Next(0, 100_000_000).ToString("D8");
+
+    // The refresh cookie is Secure and the test server is http, so the cookie is carried by hand.
+    private static string? CookieValue(HttpResponseMessage response)
+    {
+        if (!response.Headers.TryGetValues("Set-Cookie", out var values)) return null;
+        var pair = values.Select(v => v.Split(';')[0])
+            .FirstOrDefault(v => v.StartsWith(CookiePrefix, StringComparison.Ordinal));
+        return pair?[CookiePrefix.Length..];
+    }
+
+    private async Task<Session> Login(string? phone = null)
+    {
+        phone ??= NewPhone();
+        (await _client.PostAsJsonAsync("/api/auth/otp/request", new { phone, language = "en" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var codeResponse = await _client.GetAsync($"/api/dev/otp/{phone}");
+        using var codeDoc = JsonDocument.Parse(await codeResponse.Content.ReadAsStringAsync());
+        var code = codeDoc.RootElement.GetProperty("code").GetString()!;
+
+        var verify = await _client.PostAsJsonAsync("/api/auth/otp/verify", new { phone, code });
+        verify.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await verify.Content.ReadAsStringAsync());
+        return new Session(phone, doc.RootElement.GetProperty("accessToken").GetString()!, CookieValue(verify)!);
+    }
+
+    private Task<HttpResponseMessage> Post(string url, string? refreshToken, string? accessToken = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url);
+        if (refreshToken is not null) request.Headers.Add("Cookie", CookiePrefix + refreshToken);
+        if (accessToken is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return _client.SendAsync(request);
+    }
+
+    private Task<HttpResponseMessage> Refresh(string? token) => Post("/api/auth/refresh", token);
+
+    private static async Task ShouldFailWith(HttpResponseMessage response, HttpStatusCode status, string code)
+    {
+        response.StatusCode.ShouldBe(status);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("code").GetString().ShouldBe(code);
+    }
+
+    [Fact]
+    public async Task Refresh_rotates_cookie_and_returns_new_access_token()
+    {
+        var session = await Login();
+        _factory.Clock.Advance(TimeSpan.FromMinutes(1));
+
+        var response = await Refresh(session.RefreshToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rotated = CookieValue(response);
+        rotated.ShouldNotBeNullOrEmpty();
+        rotated.ShouldNotBe(session.RefreshToken);
+        var cookie = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(CookiePrefix, StringComparison.Ordinal));
+        cookie.ShouldContain("httponly", Case.Insensitive);
+        cookie.ShouldContain("secure", Case.Insensitive);
+        cookie.ShouldContain("samesite=strict", Case.Insensitive);
+        cookie.ShouldContain("path=/api/auth", Case.Insensitive);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("accessToken").GetString().ShouldNotBeNullOrEmpty();
+        body.RootElement.TryGetProperty("refreshToken", out _).ShouldBeFalse();
+
+        (await Refresh(rotated)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Reusing_rotated_token_after_grace_revokes_family()
+    {
+        var a = (await Login()).RefreshToken;
+        var b = CookieValue(await Refresh(a))!;
+
+        _factory.Clock.Advance(TimeSpan.FromSeconds(11));
+        var reuse = await Refresh(a);
+        await ShouldFailWith(reuse, HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_REUSED);
+        CookieValue(reuse).ShouldBeEmpty();
+
+        await ShouldFailWith(await Refresh(b), HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+    }
+
+    [Fact]
+    public async Task Reusing_rotated_token_within_grace_does_not_revoke_family()
+    {
+        var a = (await Login()).RefreshToken;
+        var b = CookieValue(await Refresh(a))!;
+
+        _factory.Clock.Advance(TimeSpan.FromSeconds(5));
+        await ShouldFailWith(await Refresh(a), HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+
+        (await Refresh(b)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Refresh_extends_expiry_sliding_30_days()
+    {
+        var token = (await Login()).RefreshToken;
+        for (var day = 0; day < 29; day++)
+        {
+            _factory.Clock.Advance(TimeSpan.FromDays(1));
+            var response = await Refresh(token);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            token = CookieValue(response)!;
+        }
+
+        // 29 days after login the chain is alive, and the latest token carries a fresh 30 days.
+        _factory.Clock.Advance(TimeSpan.FromDays(30) - TimeSpan.FromSeconds(1));
+        (await Refresh(token)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var idle = (await Login()).RefreshToken;
+        _factory.Clock.Advance(TimeSpan.FromDays(30) + TimeSpan.FromSeconds(1));
+        await ShouldFailWith(await Refresh(idle), HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+    }
+
+    [Fact]
+    public async Task Unknown_or_missing_token_is_REFRESH_TOKEN_INVALID_and_clears_cookie()
+    {
+        var unknown = await Refresh("not-a-real-token");
+        await ShouldFailWith(unknown, HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+        CookieValue(unknown).ShouldBeEmpty();
+
+        await ShouldFailWith(await Refresh(null), HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+    }
+
+    [Fact]
+    public async Task Logout_revokes_family_clears_cookie_and_is_idempotent()
+    {
+        var a = (await Login()).RefreshToken;
+        var b = CookieValue(await Refresh(a))!;
+
+        var logout = await Post("/api/auth/logout", b);
+        logout.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        CookieValue(logout).ShouldBeEmpty();
+
+        await ShouldFailWith(await Refresh(b), HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+        (await Post("/api/auth/logout", b)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await Post("/api/auth/logout", null)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Logout_all_revokes_every_device_and_logs_LOGGED_OUT_ALL()
+    {
+        // Access tokens are validated against the wall clock, so start the fake clock there.
+        _factory.Clock.UtcNow = DateTimeOffset.UtcNow;
+        var phone = NewPhone();
+        var first = await Login(phone);
+        _factory.Clock.Advance(TimeSpan.FromSeconds(61));
+        var second = await Login(phone);
+
+        await ShouldFailWith(await Post("/api/auth/logout-all", null),
+            HttpStatusCode.Unauthorized, ErrorCodes.UNAUTHENTICATED);
+
+        var logoutAll = await Post("/api/auth/logout-all", first.RefreshToken, first.AccessToken);
+        logoutAll.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        await ShouldFailWith(await Refresh(first.RefreshToken), HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+        await ShouldFailWith(await Refresh(second.RefreshToken), HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+
+        var userId = Guid.Parse(new JsonWebTokenHandler().ReadJsonWebToken(first.AccessToken).Subject);
+        await using var ctx = _db.CreateAppContext();
+        (await ctx.ActivityLog.CountAsync(a => a.Action == "LOGGED_OUT_ALL" && a.ActorUserId == userId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Blocked_user_refresh_fails_USER_BLOCKED()
+    {
+        var session = await Login();
+        await using (var ctx = _db.CreateAppContext())
+        {
+            var phone = PhoneNumber.Parse(session.Phone);
+            var user = await ctx.Users.SingleAsync(u => u.Phone == phone);
+            user.Block();
+            await ctx.SaveChangesAsync();
+        }
+
+        await ShouldFailWith(await Refresh(session.RefreshToken), HttpStatusCode.Forbidden, ErrorCodes.USER_BLOCKED);
+    }
+}
