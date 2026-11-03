@@ -136,4 +136,27 @@ public class OtpChallengeTests
         c.SendCount.ShouldBe(0);
         c.WindowStartedAt.ShouldBeNull();
     }
+
+    [Fact]
+    public void CommitStateChanges_flag_is_set_only_for_counted_attempt_and_new_lock()
+    {
+        var c = NewChallenge();
+        var fresh = NewChallenge();
+        Thrown(() => fresh.Verify("x", T0), ErrorCodes.OTP_INVALID).CommitStateChanges.ShouldBeFalse();
+
+        c.RecordSend("h1", T0);
+        Thrown(() => c.RecordSend("h2", T0.AddSeconds(5)), ErrorCodes.OTP_RESEND_TOO_SOON)
+            .CommitStateChanges.ShouldBeFalse();
+
+        var now = T0.AddSeconds(10);
+        Thrown(() => c.Verify("bad", now), ErrorCodes.OTP_INVALID).CommitStateChanges.ShouldBeTrue();
+        for (var i = 0; i < 3; i++) Should.Throw<DomainException>(() => c.Verify("bad", now));
+        Thrown(() => c.Verify("bad", now), ErrorCodes.OTP_LOCKED).CommitStateChanges.ShouldBeTrue();
+        Thrown(() => c.Verify("bad", now), ErrorCodes.OTP_LOCKED).CommitStateChanges.ShouldBeFalse();
+        Thrown(() => c.RecordSend("h3", now), ErrorCodes.OTP_LOCKED).CommitStateChanges.ShouldBeFalse();
+
+        var e = NewChallenge();
+        e.RecordSend("h1", T0);
+        Thrown(() => e.Verify("h1", T0.AddMinutes(6)), ErrorCodes.OTP_EXPIRED).CommitStateChanges.ShouldBeFalse();
+    }
 }

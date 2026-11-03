@@ -71,11 +71,13 @@ public class OtpChallenge : Entity
             {
                 LockedUntil = now + OtpRules.LockDuration;
                 throw new DomainException(ErrorCodes.OTP_LOCKED,
-                    new Dictionary<string, object?> { ["lockedUntil"] = LockedUntil });
+                    new Dictionary<string, object?> { ["lockedUntil"] = LockedUntil },
+                    commitStateChanges: true);
             }
 
             throw new DomainException(ErrorCodes.OTP_INVALID,
-                new Dictionary<string, object?> { ["attemptsLeft"] = OtpRules.MaxFailedAttempts - FailedAttempts });
+                new Dictionary<string, object?> { ["attemptsLeft"] = OtpRules.MaxFailedAttempts - FailedAttempts },
+                commitStateChanges: true);
         }
 
         CodeHash = null;
