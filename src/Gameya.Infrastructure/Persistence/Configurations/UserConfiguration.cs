@@ -23,6 +23,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.EmailSendTimes).HasColumnType("jsonb");
 
+        // Optimistic concurrency via PostgreSQL's xmin: parallel email changes cannot all pass the send limit,
+        // and a photo upload cannot land on a row that DeleteAccount anonymized in between.
+        builder.Property<uint>("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+
         builder.HasIndex(u => u.Phone).IsUnique().HasFilter("deleted_at IS NULL");
         builder.HasIndex(u => u.Email).IsUnique().HasFilter("email IS NOT NULL");
         builder.HasIndex(u => u.PendingEmailTokenHash);
