@@ -78,6 +78,7 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
     {
         var problem = new ProblemDetails { Status = status };
         problem.Extensions["code"] = code;
+        problem.Extensions["traceId"] = context.GetCorrelationId();
         if (parameters is { Count: > 0 }) problem.Extensions["params"] = parameters;
         if (errors is { Count: > 0 }) problem.Extensions["errors"] = errors;
 

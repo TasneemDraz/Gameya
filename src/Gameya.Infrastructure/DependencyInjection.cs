@@ -75,9 +75,11 @@ public static class DependencyInjection
             rootPath = Path.Combine(environment.ContentRootPath, ".data", "files");
         }
 
+        var fullRoot = Path.GetFullPath(rootPath);
+        services.AddSingleton(new StorageRoot(fullRoot));
         services.AddSingleton(sp => new SignedFileUrls(signingKey, sp.GetRequiredService<IClock>()));
         services.AddSingleton<IFileStore>(sp =>
-            new LocalFileStore(Path.GetFullPath(rootPath), sp.GetRequiredService<SignedFileUrls>()));
+            new LocalFileStore(fullRoot, sp.GetRequiredService<SignedFileUrls>()));
         services.AddSingleton<IImageProcessor, MagickImageProcessor>();
     }
 
@@ -100,10 +102,16 @@ public static class DependencyInjection
 
     private static void AddSms(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
+        // The dev OTP endpoint is mapped in Development and E2E whatever the provider, and needs the store.
+        // With SmsGate the store simply stays empty, so the endpoint answers NOT_FOUND instead of failing.
+        if (environment.IsDevelopmentOrE2E())
+        {
+            services.AddSingleton<DevOtpStore>();
+        }
+
         switch (configuration["Sms:Provider"])
         {
             case "Logging" when environment.IsDevelopmentOrE2E():
-                services.AddSingleton<DevOtpStore>();
                 services.AddSingleton<ISmsSender, LoggingSmsSender>();
                 break;
             case "SmsGate":

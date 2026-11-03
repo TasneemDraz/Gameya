@@ -1,20 +1,27 @@
 using Gameya.Api.IntegrationTests.Infrastructure;
+using Gameya.Api.IntegrationTests.Ops;
 using Gameya.Application.Abstractions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Serilog.Core;
 
 namespace Gameya.Api.IntegrationTests;
 
 /// <summary>Hosts the API in the E2E environment against the Testcontainers database, as the gameya_app role.</summary>
-public sealed class GameyaApiFactory(PostgresFixture database, MailpitFixture? mail = null) : WebApplicationFactory<Program>
+public sealed class GameyaApiFactory(PostgresFixture database, MailpitFixture? mail = null, string? storageRoot = null) : WebApplicationFactory<Program>
 {
+    public PostgresFixture Database => database;
+
     public const string UrlSigningKey = "test-url-signing-key-0123456789abcdef0123456789";
 
     /// <summary>A temp directory per factory, so tests never share stored files.</summary>
-    public string StorageRoot { get; } = Path.Combine(Path.GetTempPath(), "gameya-tests-" + Guid.NewGuid().ToString("N"));
+    public string StorageRoot { get; } = storageRoot ?? Path.Combine(Path.GetTempPath(), "gameya-tests-" + Guid.NewGuid().ToString("N"));
+
+    /// <summary>Every Serilog event the host writes; the host adds DI-registered sinks to its logger.</summary>
+    public CapturingSink LogSink { get; } = new();
 
     public MutableClock Clock { get; } = new(new DateTimeOffset(2026, 11, 3, 10, 0, 0, TimeSpan.Zero));
 
@@ -41,6 +48,7 @@ public sealed class GameyaApiFactory(PostgresFixture database, MailpitFixture? m
         {
             services.RemoveAll<IClock>();
             services.AddSingleton<IClock>(Clock);
+            services.AddSingleton<ILogEventSink>(LogSink);
         });
     }
 

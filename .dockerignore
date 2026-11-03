@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+.git/
+.gitignore
+.superpowers/
+.claude/
+.vs/
+.vscode/
+.idea/
+**/node_modules/
+tests/
+docs/
+docker/
+infra/
+.data/
+*.md
+**/*.log
