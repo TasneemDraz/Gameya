@@ -5,7 +5,11 @@ using System.Text.Json;
 using Gameya.Api.IntegrationTests.Infrastructure;
 using Gameya.Domain.Common;
 using Gameya.Domain.Users;
+using Gameya.Application.Auth;
+using MediatR;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Gameya.Api.IntegrationTests.Auth;
@@ -166,6 +170,41 @@ public sealed class SessionTests : IDisposable
         var userId = Guid.Parse(new JsonWebTokenHandler().ReadJsonWebToken(session.AccessToken).Subject);
         await using var ctx = _db.CreateAppContext();
         (await ctx.RefreshTokens.CountAsync(t => t.UserId == userId && t.RevokedAt == null)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Concurrency_conflict_on_refresh_is_401_REFRESH_TOKEN_INVALID_and_keeps_the_cookie()
+    {
+        var session = await Login();
+        using var racing = _factory.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+            s.AddSingleton<IPipelineBehavior<RefreshSessionCommand, SessionResult>>(
+                new BumpTokenRowAfterHandler(_db))));
+        using var client = racing.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh");
+        request.Headers.Add("Cookie", CookiePrefix + session.RefreshToken);
+
+        var response = await client.SendAsync(request);
+
+        await ShouldFailWith(response, HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+        DeletesCookie(response).ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// Innermost behavior: after the handler has read and modified the token, a second writer touches the
+    /// row (changing its xmin) before the transaction behavior saves, which forces the optimistic conflict.
+    /// </summary>
+    private sealed class BumpTokenRowAfterHandler(PostgresFixture db)
+        : IPipelineBehavior<RefreshSessionCommand, SessionResult>
+    {
+        public async Task<SessionResult> Handle(
+            RefreshSessionCommand request, RequestHandlerDelegate<SessionResult> next, CancellationToken ct)
+        {
+            var result = await next(ct);
+            await using var other = db.CreateAppContext();
+            await other.Database.ExecuteSqlRawAsync(
+                "UPDATE refresh_tokens SET revoked_at = revoked_at WHERE revoked_at IS NULL", ct);
+            return result;
+        }
     }
 
     [Fact]
