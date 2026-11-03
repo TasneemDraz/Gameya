@@ -32,6 +32,7 @@ services:
     logging: *json-file-logging
 
   api:
+    image: gameya-api:dev
     build:
       context: .
       dockerfile: src/Gameya.Api/Dockerfile
