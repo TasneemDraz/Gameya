@@ -1,3 +1,4 @@
+using Gameya.Api.Infrastructure;
 using Gameya.Application.Users;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -49,6 +50,13 @@ public static class MeEndpoints
         group.MapDelete("/photo", async (ISender sender, CancellationToken ct) =>
         {
             await sender.Send(new RemovePhotoCommand(), ct);
+            return Results.NoContent();
+        });
+
+        group.MapDelete("", async (ISender sender, HttpContext http, CancellationToken ct) =>
+        {
+            await sender.Send(new DeleteAccountCommand(), ct);
+            RefreshCookie.Clear(http.Response);
             return Results.NoContent();
         });
 
