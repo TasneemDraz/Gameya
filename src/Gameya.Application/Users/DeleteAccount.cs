@@ -18,11 +18,8 @@ public sealed class DeleteAccountHandler(IAppDbContext db, ICurrentUser currentU
     public async Task<Unit> Handle(DeleteAccountCommand request, CancellationToken cancellationToken)
     {
         var userId = currentUser.UserId ?? throw new DomainException(ErrorCodes.UNAUTHENTICATED);
-        var user = await db.Users.FirstOrDefaultAsync(new UserByIdSpec(userId), cancellationToken);
-
-        // An access token outlives the account by up to its lifetime; a deleted user is simply unauthenticated.
-        if (user is null || user.IsDeleted)
-            throw new DomainException(ErrorCodes.UNAUTHENTICATED);
+        var user = await db.Users.FirstOrDefaultAsync(new UserByIdSpec(userId), cancellationToken)
+            ?? throw new DomainException(ErrorCodes.UNAUTHENTICATED);
 
         if (await participation.HasRecruitingOrActiveGameyasAsync(userId, cancellationToken))
             throw new DomainException(ErrorCodes.ACCOUNT_HAS_ACTIVE_GAMEYAS);

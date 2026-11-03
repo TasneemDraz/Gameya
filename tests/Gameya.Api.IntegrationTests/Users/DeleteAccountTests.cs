@@ -18,13 +18,15 @@ public sealed class DeleteAccountTests : IDisposable
     private const string CookiePrefix = "gameya_rt=";
 
     private readonly PostgresFixture _db;
+    private readonly MailpitFixture _mail;
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public DeleteAccountTests(PostgresFixture db)
+    public DeleteAccountTests(PostgresFixture db, MailpitFixture mail)
     {
         _db = db;
-        _factory = new GameyaApiFactory(db);
+        _mail = mail;
+        _factory = new GameyaApiFactory(db, mail);
         _client = _factory.CreateClient();
     }
 
@@ -151,5 +153,33 @@ public sealed class DeleteAccountTests : IDisposable
         await using var ctx = _db.CreateAppContext();
         (await ctx.Users.AsNoTracking().SingleAsync(u => u.Id == first.UserId)).IsDeleted.ShouldBeTrue();
         (await ctx.Users.AsNoTracking().SingleAsync(u => u.Id == second.UserId)).IsDeleted.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Deleted_user_with_a_still_valid_token_cannot_repopulate_the_account()
+    {
+        var s = await LoginAsync();
+        (await _client.SendAsync(Request(HttpMethod.Delete, "/api/me", s.Access, s.Refresh)))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var email = $"u{Guid.NewGuid():N}@example.com";
+        var profile = Request(HttpMethod.Put, "/api/me/profile", s.Access);
+        profile.Content = JsonContent.Create(new { fullName = "Back Again", language = "en" });
+        var changeEmail = Request(HttpMethod.Put, "/api/me/email", s.Access);
+        changeEmail.Content = JsonContent.Create(new { email });
+
+        foreach (var request in new[] { profile, changeEmail, Request(HttpMethod.Get, "/api/me", s.Access) })
+        {
+            var response = await _client.SendAsync(request);
+            response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized, request.RequestUri!.ToString());
+            (await TestApi.JsonAsync(response)).GetProperty("code").GetString().ShouldBe(ErrorCodes.UNAUTHENTICATED);
+        }
+
+        await using var ctx = _db.CreateAppContext();
+        var user = await ctx.Users.AsNoTracking().SingleAsync(u => u.Id == s.UserId);
+        user.FullName.ShouldBeNull();
+        user.Email.ShouldBeNull();
+        user.PendingEmail.ShouldBeNull();
+        (await _mail.MessagesToAsync(email)).ShouldBeEmpty();
     }
 }
