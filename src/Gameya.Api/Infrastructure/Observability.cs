@@ -31,15 +31,23 @@ public static class Observability
     /// </summary>
     public static WebApplicationBuilder AddObservability(this WebApplicationBuilder builder)
     {
-        builder.Host.UseSerilog((_, services, logger) => logger
-            .MinimumLevel.Information()
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-            .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
-            .Enrich.FromLogContext()
-            .Enrich.With<RedactingEnricher>()
-            .WriteTo.Console(new CompactJsonFormatter())
-            .ReadFrom.Services(services),
-            preserveStaticLogger: true);
+        builder.Host.UseSerilog((_, services, logger) =>
+        {
+            // Every output sink (console and DI-registered ones) sits behind ExceptionRedactingSink, because an
+            // enricher cannot change LogEvent.Exception.
+            var outputs = new LoggerConfiguration()
+                .MinimumLevel.Verbose()
+                .WriteTo.Console(new CompactJsonFormatter())
+                .ReadFrom.Services(services)
+                .CreateLogger();
+            logger
+                .MinimumLevel.Information()
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
+                .Enrich.FromLogContext()
+                .Enrich.With<RedactingEnricher>()
+                .WriteTo.Sink(new ExceptionRedactingSink(outputs));
+        }, preserveStaticLogger: true);
 
         // Traces and metrics are always collected in-process; nothing leaves the process unless an OTLP endpoint is set.
         var telemetry = builder.Services.AddOpenTelemetry()
@@ -198,7 +206,7 @@ public sealed partial class RedactingEnricher : ILogEventEnricher
     };
 
     /// <summary>Same shape as <c>PhoneNumber.Masked</c>: <c>+201012345678</c> and <c>01012345678</c> become <c>010****5678</c>.</summary>
-    private static string MaskPhones(string text) =>
+    public static string MaskPhones(string text) =>
         LocalPhone().Replace(InternationalPhone().Replace(text, m => Mask("0" + m.Groups[1].Value)), m => Mask(m.Value));
 
     private static string Mask(string local) => local[..3] + "****" + local[^4..];
@@ -211,4 +219,44 @@ public sealed partial class RedactingEnricher : ILogEventEnricher
 
     [GeneratedRegex(@"^(code|token|refreshToken|email)\z", RegexOptions.IgnoreCase)]
     private static partial Regex SensitiveName();
+}
+
+/// <summary>An exception stand-in whose message and full text (type, message, inner exceptions, stack) are already masked.</summary>
+public sealed class RedactedException(string typeName, string message, string text) : Exception(message)
+{
+    public string OriginalType { get; } = typeName;
+
+    public override string ToString() => text;
+}
+
+/// <summary>
+/// Forwards events to the real sinks after replacing the exception with a phone-masked copy, so no sink ever
+/// sees an unmasked phone in exception text. Same exemption as <see cref="RedactingEnricher"/>.
+/// </summary>
+public sealed class ExceptionRedactingSink(Serilog.ILogger inner) : ILogEventSink, IDisposable
+{
+    private const string DevSmsSenderContext = "Gameya.Infrastructure.Sms.LoggingSmsSender";
+
+    public void Emit(LogEvent logEvent)
+    {
+        var exception = logEvent.Exception;
+        var exempt = logEvent.Properties.TryGetValue("SourceContext", out var context)
+            && context is ScalarValue { Value: DevSmsSenderContext };
+        if (exception is null || exempt)
+        {
+            inner.Write(logEvent);
+            return;
+        }
+
+        var masked = new RedactedException(
+            exception.GetType().FullName ?? "Exception",
+            RedactingEnricher.MaskPhones(exception.Message),
+            RedactingEnricher.MaskPhones(exception.ToString()));
+        inner.Write(new LogEvent(
+            logEvent.Timestamp, logEvent.Level, masked, logEvent.MessageTemplate,
+            logEvent.Properties.Select(p => new LogEventProperty(p.Key, p.Value)),
+            logEvent.TraceId ?? default, logEvent.SpanId ?? default));
+    }
+
+    public void Dispose() => (inner as IDisposable)?.Dispose();
 }

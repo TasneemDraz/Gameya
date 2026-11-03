@@ -2,7 +2,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Gameya.Api.Infrastructure;
 using Gameya.Api.IntegrationTests.Infrastructure;
+using Gameya.Application.Abstractions;
+using Gameya.Domain.Users;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using Serilog.Events;
+using Serilog.Formatting.Compact;
 using Serilog.Parsing;
 
 namespace Gameya.Api.IntegrationTests.Ops;
@@ -67,6 +73,65 @@ public sealed class LogRedactionTests : IDisposable
             text.ShouldNotContain(sig);
             text.ShouldNotContain("sig=");
         }
+    }
+
+    [Fact]
+    public void Exception_text_is_masked_in_the_real_formatter_output()
+    {
+        var output = new StringWriter();
+        var sinkLogger = new LoggerConfiguration()
+            .WriteTo.Sink(new FormattingSink(new CompactJsonFormatter(), output))
+            .CreateLogger();
+        var logger = new LoggerConfiguration()
+            .Enrich.With<RedactingEnricher>()
+            .WriteTo.Sink(new ExceptionRedactingSink(sinkLogger))
+            .CreateLogger();
+        var ex = new InvalidOperationException(
+            "outer for +201012345678", new ArgumentException("inner Key (phone)=(+201112345678) exists"));
+
+        logger.Error(ex, "failed");
+        logger.Dispose();
+
+        var line = output.ToString();
+        line.ShouldContain("010****5678");
+        line.ShouldContain("011****5678");
+        line.ShouldNotContain("1012345678");
+        line.ShouldNotContain("1112345678");
+        System.Text.Json.JsonDocument.Parse(line).RootElement.GetProperty("@x").GetString()!.ShouldContain("InvalidOperationException");
+    }
+
+    [Fact]
+    public async Task Unhandled_500_with_a_phone_in_the_exception_logs_no_unmasked_phone()
+    {
+        using var factory = _factory.WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+            services.AddSingleton<ISmsSender, ThrowingSmsSender>()));
+        using var client = factory.CreateClient();
+        var phone = TestApi.NewPhone(); // fresh: the shared database may already hold a challenge for a fixed number
+
+        var response = await client.PostAsJsonAsync("/api/auth/otp/request", new { phone, language = "en" });
+
+        response.StatusCode.ShouldBe(System.Net.HttpStatusCode.InternalServerError);
+        var failures = _factory.LogSink.Events.Where(e => e.Exception is not null).ToList();
+        failures.ShouldNotBeEmpty();
+        foreach (var text in _factory.LogSink.Events.Select(CapturingSink.FullText))
+        {
+            text.ShouldNotContain(phone);
+            text.ShouldNotContain("+2" + phone);
+        }
+
+        failures.ShouldContain(e => e.Exception!.ToString().Contains("****"));
+    }
+
+    /// <summary>Writes events the way the console sink does: through the same formatter.</summary>
+    private sealed class FormattingSink(Serilog.Formatting.ITextFormatter formatter, TextWriter writer) : Serilog.Core.ILogEventSink
+    {
+        public void Emit(LogEvent logEvent) => formatter.Format(logEvent, writer);
+    }
+
+    private sealed class ThrowingSmsSender : ISmsSender
+    {
+        public Task SendAsync(PhoneNumber to, string message, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException($"provider rejected {to.E164}");
     }
 
     [Fact]
