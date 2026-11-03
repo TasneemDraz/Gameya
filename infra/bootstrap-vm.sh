@@ -66,7 +66,7 @@ done
 netfilter-persistent save
 
 echo "== /opt/gameya"
-install -d -o deploy -g deploy /opt/gameya /opt/gameya/releases /opt/gameya/backups
+install -d -o deploy -g deploy /opt/gameya /opt/gameya/caddy /opt/gameya/releases /opt/gameya/backups
 
 echo "== backup timer"
 install -m 0644 "$HERE/gameya-backup.service" /etc/systemd/system/gameya-backup.service

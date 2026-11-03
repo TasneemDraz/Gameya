@@ -73,7 +73,8 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # A directory mount: a single-file mount would keep the old inode after an upload replaces the file.
+      - ./caddy:/etc/caddy:ro
       - ./releases:/srv/releases:ro
     logging: *json-file-logging
 

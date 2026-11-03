@@ -86,10 +86,11 @@ jobs:
       - name: Upload the release
         run: |
           set -euo pipefail
-          ssh target "mkdir -p /opt/gameya/releases/${GITHUB_SHA}"
+          ssh target "mkdir -p /opt/gameya/caddy /opt/gameya/releases/${GITHUB_SHA}"
           rsync -az --delete src/gameya-web/dist/gameya-web/browser/ "target:/opt/gameya/releases/${GITHUB_SHA}/web/"
           rsync -az efbundle infra/sql/roles.sql "target:/opt/gameya/releases/${GITHUB_SHA}/"
-          rsync -az infra/compose.prod.yml infra/Caddyfile infra/deploy-release.sh infra/backup.sh infra/restore.sh target:/opt/gameya/
+          rsync -az infra/compose.prod.yml infra/deploy-release.sh infra/backup.sh infra/restore.sh target:/opt/gameya/
+          rsync -az infra/Caddyfile target:/opt/gameya/caddy/
           ssh target "chmod +x /opt/gameya/*.sh /opt/gameya/releases/${GITHUB_SHA}/efbundle"
 
       - name: Load the API image
@@ -123,22 +124,25 @@ jobs:
         run: |
           set -euo pipefail
           # Values are single-quoted (compose reads them literally, so "$" is safe); a quote or newline cannot be.
-          emit() {
-            local value="${!1-}"
+          # Validation runs in this shell (not a command substitution), so a bad value fails the step before
+          # anything is sent over SSH.
+          content=""
+          bad=0
+          for name in ASPNETCORE_ENVIRONMENT SITE_ADDRESS POSTGRES_PASSWORD DB_MIGRATOR_PASSWORD DB_APP_PASSWORD \
+            JWT_SIGNING_KEY SECURITY_HASH_KEY STORAGE_URL_SIGNING_KEY SMTP_USERNAME SMTP_PASSWORD EMAIL_FROM \
+            SMS_PROVIDER SMSGATE_BASE_URL SMSGATE_USERNAME SMSGATE_PASSWORD SMS_API_KEY MEDIATR_LICENSE_KEY \
+            B2_KEY_ID B2_APP_KEY B2_BUCKET BACKUP_PING_URL OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_HEADERS; do
+            value="${!name-}"
             if [[ "$value" == *"'"* || "$value" == *$'\n'* ]]; then
-              echo "::error::secret $1 must not contain a single quote or a newline"
-              return 1
+              echo "::error::secret $name must not contain a single quote or a newline"
+              bad=1
+              continue
             fi
-            printf "%s='%s'\n" "$1" "$value"
-          }
-          content="$(
-            for name in ASPNETCORE_ENVIRONMENT SITE_ADDRESS POSTGRES_PASSWORD DB_MIGRATOR_PASSWORD DB_APP_PASSWORD \
-              JWT_SIGNING_KEY SECURITY_HASH_KEY STORAGE_URL_SIGNING_KEY SMTP_USERNAME SMTP_PASSWORD EMAIL_FROM \
-              SMS_PROVIDER SMSGATE_BASE_URL SMSGATE_USERNAME SMSGATE_PASSWORD SMS_API_KEY MEDIATR_LICENSE_KEY \
-              B2_KEY_ID B2_APP_KEY B2_BUCKET BACKUP_PING_URL OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_HEADERS; do
-              emit "$name"
-            done
-          )"
+            content+="$name='$value'"$'\n'
+          done
+          if ((bad != 0)); then
+            exit 1
+          fi
           printf '%s\n' "$content" | ssh target 'umask 077; cat > /opt/gameya/.env.new && mv /opt/gameya/.env.new /opt/gameya/.env'
 
       - name: Deploy

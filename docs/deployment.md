@@ -62,11 +62,11 @@ Protect `main` so a merge needs these status checks from `ci.yml` (names as in t
 
 ## What a deploy does
 
-`deploy.yml` builds the linux/arm64 API image (`docker buildx`, no emulation: the Dockerfile cross-publishes), the self-contained linux-arm64 `efbundle`, and the Angular production build. It uploads the web build, `efbundle` and `roles.sql` to `/opt/gameya/releases/<sha>/` and the `infra/` runtime files to `/opt/gameya/` over SSH with the pinned host key, loads the image, writes `/opt/gameya/.env` (mode 600) through stdin, and runs `deploy-release.sh <sha>`. The job result is that script's exit code.
+`deploy.yml` builds the linux/arm64 API image (`docker buildx`, no emulation: the Dockerfile cross-publishes), the self-contained linux-arm64 `efbundle`, and the Angular production build. It uploads the web build, `efbundle` and `roles.sql` to `/opt/gameya/releases/<sha>/` and the `infra/` runtime files to `/opt/gameya/` (the Caddyfile to `/opt/gameya/caddy/`) over SSH with the pinned host key, loads the image, writes `/opt/gameya/.env` (mode 600) through stdin, and runs `deploy-release.sh <sha>`. The job result is that script's exit code.
 
 On the VM, `deploy-release.sh`:
 
-1. starts `postgres` and `caddy`;
+1. starts `postgres` and `caddy` and reloads `/opt/gameya/caddy/Caddyfile` into the running Caddy (an invalid Caddyfile fails the deploy before anything changes);
 2. applies `roles.sql` (idempotent roles and grants; passwords go over stdin);
 3. runs the `efbundle` as `gameya_migrator` in a `runtime-deps` container on the compose network;
 4. records the previous `API_TAG` and the `releases/current` target, writes the new `API_TAG` to `image.env`, restarts `api` and flips `releases/current` (a relative symlink) to the new release;

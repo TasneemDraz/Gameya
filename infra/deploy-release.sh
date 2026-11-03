@@ -4,7 +4,7 @@
 # Expects image gameya-api:<sha> already loaded and releases/<sha>/{web/,efbundle,roles.sql} uploaded.
 # Env overrides (local rehearsal only): GAMEYA_ROOT (default /opt/gameya), GAMEYA_INSECURE_CURL=1 (curl -k, for
 # Caddy's internal CA), HEALTH_TIMEOUT_SECONDS (default 300).
-set -euo pipefail
+set -Eeuo pipefail
 
 SHA="${1:?usage: deploy-release.sh <sha>}"
 [[ "$SHA" =~ ^[0-9a-zA-Z._-]+$ ]] || { echo "invalid release id: $SHA" >&2; exit 2; }
@@ -67,7 +67,13 @@ if [[ ! -f "$ROOT/image.env" ]]; then
 fi
 
 log "starting postgres and caddy"
+# Caddyfile lives in its own directory (mounted as a directory) so an upload by rename is always visible.
+mkdir -p "$ROOT/caddy"
+[[ -f "$ROOT/caddy/Caddyfile" ]] || { echo "$ROOT/caddy/Caddyfile is missing" >&2; exit 1; }
 compose up -d --wait postgres caddy
+log "reloading the Caddyfile"
+# An invalid Caddyfile makes this fail, which aborts the deploy before anything is changed.
+compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 
 log "applying roles.sql"
 # Passwords travel on stdin, never on a command line (they would show up in the process list).
@@ -105,6 +111,15 @@ rollback() {
   fi
 }
 
+# From here until the health check passes, any failure or termination signal (SSH drop, job timeout) rolls back.
+on_failure() {
+  trap - ERR HUP INT TERM
+  set +e
+  rollback
+  exit 1
+}
+trap on_failure ERR HUP INT TERM
+
 log "switching api to $SHA"
 echo "API_TAG=$SHA" > "$ROOT/image.env"
 compose up -d api
@@ -126,9 +141,9 @@ done
 
 if ((healthy == 0)); then
   compose logs --tail 40 api >&2 || true
-  rollback
-  exit 1
+  on_failure
 fi
+trap - ERR HUP INT TERM
 log "healthy"
 
 # Keep the newest 3 releases (and the live and previous ones) and the newest 3 images.
