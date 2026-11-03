@@ -29,6 +29,8 @@ public class PhoneNumberTests
     [InlineData("010123456789")]
     [InlineData("")]
     [InlineData("abc")]
+    [InlineData("01012345678\n")]
+    [InlineData("+201012345678\n")]
     public void Parse_rejects_invalid(string input)
     {
         var ex = Should.Throw<DomainException>(() => PhoneNumber.Parse(input));

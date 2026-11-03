@@ -44,6 +44,6 @@ public sealed partial record PhoneNumber
         return LocalPattern().IsMatch(s) ? s : null;
     }
 
-    [GeneratedRegex(@"^01[0125][0-9]{8}$")]
+    [GeneratedRegex(@"^01[0125][0-9]{8}\z")]
     private static partial Regex LocalPattern();
 }
