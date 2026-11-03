@@ -22,6 +22,7 @@ public static class DependencyInjection
             cfg.AddOpenBehavior(typeof(ActivityLogBehavior<,>));
         });
         services.AddValidatorsFromAssembly(assembly);
+        services.AddScoped<Auth.SessionIssuer>();
 
         return services;
     }
