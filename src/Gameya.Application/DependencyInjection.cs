@@ -1,4 +1,5 @@
 using FluentValidation;
+using Gameya.Application.Abstractions;
 using Gameya.Application.Behaviors;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,8 @@ public static class DependencyInjection
         });
         services.AddValidatorsFromAssembly(assembly);
         services.AddScoped<Auth.SessionIssuer>();
+        services.AddScoped<TransactionCallbacks>();
+        services.AddScoped<ITransactionCallbacks>(sp => sp.GetRequiredService<TransactionCallbacks>());
 
         return services;
     }

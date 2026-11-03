@@ -2,8 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Gameya.Api.IntegrationTests.Infrastructure;
+using Gameya.Application.Abstractions;
 using ImageMagick;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Gameya.Api.IntegrationTests.Users;
 
@@ -31,6 +34,55 @@ public sealed class ProfileTests : IDisposable
     {
         response.StatusCode.ShouldBe(status);
         (await TestApi.JsonAsync(response)).GetProperty("code").GetString().ShouldBe(code);
+    }
+
+    private sealed class FailingUrlFileStore(IFileStore inner) : IFileStore
+    {
+        public static volatile bool Fail;
+
+        public Task UploadAsync(string container, string key, Stream content, string contentType, CancellationToken ct) =>
+            inner.UploadAsync(container, key, content, contentType, ct);
+
+        public Task DeleteAsync(string container, string key, CancellationToken ct) => inner.DeleteAsync(container, key, ct);
+
+        public Task<Stream?> OpenReadAsync(string container, string key, CancellationToken ct) =>
+            inner.OpenReadAsync(container, key, ct);
+
+        // Called by SetPhoto after the upload, so throwing here fails the request after the file is stored.
+        public Uri GetReadUrl(string container, string key, TimeSpan lifetime) =>
+            Fail ? throw new InvalidOperationException("forced failure after upload") : inner.GetReadUrl(container, key, lifetime);
+
+        public bool IsReadUrlValid(string container, string key, long exp, string sig) =>
+            inner.IsReadUrlValid(container, key, exp, sig);
+    }
+
+    [Fact]
+    public async Task Failure_after_upload_removes_the_new_file_and_keeps_the_old_photo()
+    {
+        using var failing = _factory.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            var inner = s.Single(d => d.ServiceType == typeof(IFileStore));
+            s.Remove(inner);
+            s.AddSingleton<IFileStore>(sp => new FailingUrlFileStore((IFileStore)inner.ImplementationFactory!(sp)));
+        }));
+        using var client = failing.CreateClient();
+        await TestApi.LoginAsync(_factory, client);
+        var first = (await TestApi.JsonAsync(await TestApi.UploadPhotoAsync(client, TestApi.TestFile("photo.jpg"))))
+            .GetProperty("photoUrl").GetString()!;
+
+        FailingUrlFileStore.Fail = true;
+        try
+        {
+            (await TestApi.UploadPhotoAsync(client, TestApi.TestFile("photo.jpg")))
+                .StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        }
+        finally
+        {
+            FailingUrlFileStore.Fail = false;
+        }
+
+        Directory.GetFiles(_factory.StorageRoot, "*", SearchOption.AllDirectories).Length.ShouldBe(1);
+        (await client.GetAsync(first)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

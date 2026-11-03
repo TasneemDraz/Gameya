@@ -10,6 +10,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace Gameya.Application.Tests;
@@ -60,6 +61,7 @@ public class PipelineTests
         public List<ActivityLogEntry> Logged { get; } = [];
         public List<Entity> Tracked { get; } = [];
         public List<string> Calls { get; } = [];
+        public TransactionCallbacks Callbacks { get; } = new();
 
         public Db()
         {
@@ -218,7 +220,7 @@ public class PipelineTests
     public async Task Queries_do_not_open_transactions()
     {
         var db = new Db();
-        var tx = new TransactionBehavior<AuthQuery, int>(db.Context);
+        var tx = new TransactionBehavior<AuthQuery, int>(db.Context, db.Callbacks, NullLogger<TransactionBehavior<AuthQuery, int>>.Instance);
         var log = new ActivityLogBehavior<AuthQuery, int>(db.Context, CurrentUser(Guid.NewGuid()), Clock());
 
         await tx.Handle(new AuthQuery(), _ => log.Handle(new AuthQuery(), _ => Task.FromResult(1), default), default);
@@ -232,7 +234,7 @@ public class PipelineTests
     public async Task Command_runs_in_transaction_saves_then_commits()
     {
         var db = new Db();
-        var tx = new TransactionBehavior<AuthCmd, int>(db.Context);
+        var tx = new TransactionBehavior<AuthCmd, int>(db.Context, db.Callbacks, NullLogger<TransactionBehavior<AuthCmd, int>>.Instance);
 
         var result = await tx.Handle(new AuthCmd(), _ => { db.Calls.Add("handler"); return Task.FromResult(5); }, default);
 
@@ -246,7 +248,7 @@ public class PipelineTests
         var db = new Db();
         var entity = new EventEntity();
         db.Tracked.Add(entity);
-        var tx = new TransactionBehavior<AuthCmd, int>(db.Context);
+        var tx = new TransactionBehavior<AuthCmd, int>(db.Context, db.Callbacks, NullLogger<TransactionBehavior<AuthCmd, int>>.Instance);
         var log = new ActivityLogBehavior<AuthCmd, int>(db.Context, CurrentUser(Guid.NewGuid()), Clock());
         var thrown = new DomainException(ErrorCodes.OTP_INVALID, null, commitStateChanges: true);
 
@@ -277,7 +279,7 @@ public class PipelineTests
         {
             tokens.Add(c.Arg<CancellationToken>()); // Db already records "commit"
         });
-        var tx = new TransactionBehavior<AuthCmd, int>(db.Context);
+        var tx = new TransactionBehavior<AuthCmd, int>(db.Context, db.Callbacks, NullLogger<TransactionBehavior<AuthCmd, int>>.Instance);
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
@@ -295,7 +297,7 @@ public class PipelineTests
         var db = new Db();
         var entity = new EventEntity();
         db.Tracked.Add(entity);
-        var tx = new TransactionBehavior<AuthCmd, int>(db.Context);
+        var tx = new TransactionBehavior<AuthCmd, int>(db.Context, db.Callbacks, NullLogger<TransactionBehavior<AuthCmd, int>>.Instance);
         var log = new ActivityLogBehavior<AuthCmd, int>(db.Context, CurrentUser(Guid.NewGuid()), Clock());
 
         await Should.ThrowAsync<InvalidOperationException>(() => tx.Handle(new AuthCmd(), _ =>
@@ -307,6 +309,90 @@ public class PipelineTests
         db.Logged.ShouldBeEmpty();
         await db.Tx.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
         await db.Tx.Received(2).DisposeAsync();
+    }
+
+    private static TransactionBehavior<AuthCmd, int> Tx(Db db, Microsoft.Extensions.Logging.ILogger<TransactionBehavior<AuthCmd, int>>? logger = null) =>
+        new(db.Context, db.Callbacks, logger ?? NullLogger<TransactionBehavior<AuthCmd, int>>.Instance);
+
+    [Fact]
+    public async Task Committed_actions_run_only_after_commit_and_rolled_back_actions_do_not_run()
+    {
+        var db = new Db();
+        db.Callbacks.OnCommitted(_ => { db.Calls.Add("committed"); return Task.CompletedTask; });
+        db.Callbacks.OnRolledBack(_ => { db.Calls.Add("rolledback"); return Task.CompletedTask; });
+
+        await Tx(db).Handle(new AuthCmd(), _ => { db.Calls.Add("handler"); return Task.FromResult(1); }, default);
+
+        db.Calls.ShouldBe(["begin", "handler", "save", "commit", "committed"]);
+    }
+
+    [Fact]
+    public async Task Rolled_back_actions_run_only_on_rollback_and_the_exception_propagates()
+    {
+        var db = new Db();
+        db.Callbacks.OnCommitted(_ => { db.Calls.Add("committed"); return Task.CompletedTask; });
+        db.Callbacks.OnRolledBack(_ => { db.Calls.Add("rolledback"); return Task.CompletedTask; });
+
+        await Should.ThrowAsync<InvalidOperationException>(() =>
+            Tx(db).Handle(new AuthCmd(), _ => throw new InvalidOperationException("boom"), default));
+
+        db.Calls.ShouldBe(["begin", "rolledback"]);
+    }
+
+    [Fact]
+    public async Task A_failing_commit_counts_as_rollback()
+    {
+        var db = new Db();
+        db.Tx.CommitAsync(Arg.Any<CancellationToken>()).Returns(_ => Task.FromException(new InvalidOperationException("commit")));
+        db.Callbacks.OnCommitted(_ => { db.Calls.Add("committed"); return Task.CompletedTask; });
+        db.Callbacks.OnRolledBack(_ => { db.Calls.Add("rolledback"); return Task.CompletedTask; });
+
+        await Should.ThrowAsync<InvalidOperationException>(() =>
+            Tx(db).Handle(new AuthCmd(), _ => Task.FromResult(1), default));
+
+        db.Calls.ShouldBe(["begin", "save", "commit", "rolledback"]); // "commit" = the attempt, which threw
+    }
+
+    [Fact]
+    public async Task Committed_actions_run_on_the_CommitStateChanges_path_before_the_same_exception_is_rethrown()
+    {
+        var db = new Db();
+        db.Callbacks.OnCommitted(_ => { db.Calls.Add("committed"); return Task.CompletedTask; });
+        db.Callbacks.OnRolledBack(_ => { db.Calls.Add("rolledback"); return Task.CompletedTask; });
+        var thrown = new DomainException(ErrorCodes.OTP_INVALID, null, commitStateChanges: true);
+
+        var ex = await Should.ThrowAsync<DomainException>(() => Tx(db).Handle(new AuthCmd(), _ => throw thrown, default));
+
+        ex.ShouldBeSameAs(thrown);
+        db.Calls.ShouldBe(["begin", "save", "commit", "committed"]);
+    }
+
+    [Fact]
+    public async Task A_throwing_callback_is_swallowed_logged_and_does_not_affect_the_result_or_later_actions()
+    {
+        var db = new Db();
+        var logger = Substitute.For<Microsoft.Extensions.Logging.ILogger<TransactionBehavior<AuthCmd, int>>>();
+        db.Callbacks.OnCommitted(_ => throw new IOException("disk"));
+        db.Callbacks.OnCommitted(_ => { db.Calls.Add("second"); return Task.CompletedTask; });
+
+        var result = await Tx(db, logger).Handle(new AuthCmd(), _ => Task.FromResult(7), default);
+
+        result.ShouldBe(7);
+        db.Calls.ShouldContain("second");
+        logger.ReceivedCalls().Any(c => c.GetArguments().Contains(Microsoft.Extensions.Logging.LogLevel.Warning))
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_throwing_rollback_callback_does_not_replace_the_original_exception()
+    {
+        var db = new Db();
+        db.Callbacks.OnRolledBack(_ => throw new IOException("disk"));
+
+        var ex = await Should.ThrowAsync<InvalidOperationException>(() =>
+            Tx(db).Handle(new AuthCmd(), _ => throw new InvalidOperationException("boom"), default));
+
+        ex.Message.ShouldBe("boom");
     }
 
     [Fact]
