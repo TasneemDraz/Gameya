@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\Gameya.Infrastructure\Gameya.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
