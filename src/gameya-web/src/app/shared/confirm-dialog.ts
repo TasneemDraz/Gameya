@@ -25,12 +25,7 @@ export interface ConfirmDialogData {
       </button>
     </mat-dialog-actions>
   `,
-  styles: `
-    .destructive {
-      --mat-button-filled-container-color: var(--gy-danger-fg);
-      --mat-button-filled-label-text-color: #fff;
-    }
-  `,
+  styleUrl: './confirm-dialog.scss',
 })
 export class ConfirmDialog {
   readonly data = inject<ConfirmDialogData>(MAT_DIALOG_DATA);

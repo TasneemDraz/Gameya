@@ -19,27 +19,7 @@ import { LanguageService } from '../core/i18n/language.service';
     </mat-toolbar>
     <main class="content"><router-outlet /></main>
   `,
-  styles: `
-    :host {
-      display: block;
-      min-block-size: 100dvh;
-    }
-
-    .bar {
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .brand {
-      font-weight: 600;
-    }
-
-    .content {
-      max-inline-size: 480px;
-      margin-inline: auto;
-      padding: 16px;
-    }
-  `,
+  styleUrl: './public-layout.scss',
 })
 export class PublicLayout {
   private readonly lang = inject(LanguageService);
