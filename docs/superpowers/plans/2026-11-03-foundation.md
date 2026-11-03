@@ -299,9 +299,10 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
   - `Registration_event_uses_actor_override_when_anonymous`.
   - `Queries_do_not_open_transactions`.
   - `AccessAttributeCoverageTests.Every_request_has_exactly_one_access_attribute`: reflects over the Application assembly for `IRequest<>` implementations. This is the spec's "authorization declared on every request" check.
-  - `SpecificationEvaluationTests` (EF Core SQLite in-memory, used only to evaluate expression translation):
-    - `Projection_spec_returns_projected_type_untracked`: a sample `Specification<User, (Guid, string?)>` returns rows, and `ChangeTracker.Entries()` is empty.
-    - `Entity_spec_returns_tracked_entity`.
+  - `SpecificationEvaluationTests` (no database; apply `SpecificationEvaluator.Default.GetQuery(list.AsQueryable(), spec)` over in-memory `User` objects):
+    - `ActiveUserByPhoneSpec_excludes_deleted_users`.
+    - `Projection_spec_selects_requested_fields`: a sample `Specification<User, (Guid, string?)>`.
+    - Untracked vs tracked behavior is checked against real Postgres in Task 6 (`Projection_specs_are_untracked`, `Entity_specs_are_tracked`).
   - `tests/Gameya.ArchitectureTests/DataAccessTests.Handlers_do_not_query_DbSets_directly`: a Mono.Cecil IL scan. No method in types implementing `IRequestHandler<,>` calls `System.Linq.Queryable::Where|Select|First*|Single*|Any|Count` or `EntityFrameworkQueryableExtensions::*Async`. The spec extensions are the only permitted read path. `DbSet.Add`/`Remove` are allowed.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement the behaviors and DI.
@@ -343,6 +344,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
   - `App_role_cannot_delete_activity_log` (same SqlState).
   - `Interceptor_throws_when_entry_modified_through_ef`: load an entry, modify `Note` via `Entry().Property`, `SaveChanges` → `InvalidOperationException`.
   - `Phone_unique_ignores_deleted_users`.
+  - `Projection_specs_are_untracked`: `MeRowSpec` via `ListAsync` leaves `ChangeTracker.Entries()` empty. `Entity_specs_are_tracked`: `UserByIdSpec` result is in the `Unchanged` state.
 - [ ] **Step 2:** Run `dotnet test tests/Gameya.Api.IntegrationTests` (Docker running). Expected: FAIL.
 - [ ] **Step 3:** Implement the context, configurations, and interceptor. Then run `dotnet ef migrations add Initial -p src/Gameya.Infrastructure -s src/Gameya.Api` and append the REVOKE SQL.
 - [ ] **Step 4:** Run. Expected: PASS.
