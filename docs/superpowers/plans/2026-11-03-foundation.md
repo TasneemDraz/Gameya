@@ -6,7 +6,7 @@
 
 **Architecture:** A modular monolith with Clean Architecture layers (Domain → Application → Infrastructure → Api). Each layer has feature folders. A MediatR pipeline (validation → authorization → transaction → activity log) wraps every request. An Angular SPA is served by Azure Static Web Apps, and its linked App Service backend serves `/api` on the same origin.
 
-**Tech Stack:** .NET 10 (LTS), ASP.NET Core, MediatR, FluentValidation, EF Core + Npgsql (PostgreSQL 17), Hangfire.PostgreSql, Magick.NET, Azure Blob/ACS Email, Serilog, OpenTelemetry. Tests: xUnit, Shouldly, NSubstitute, Testcontainers, NetArchTest. Frontend: Angular (latest stable), Angular Material, Transloco, Playwright. Tooling: Husky, lint-staged, commitlint. Infra: Docker, GitHub Actions, Bicep.
+**Tech Stack:** .NET 10 (LTS), ASP.NET Core, MediatR, FluentValidation, Ardalis.Specification (+ `.EntityFrameworkCore`), EF Core + Npgsql (PostgreSQL 17), Hangfire.PostgreSql, Magick.NET, Azure Blob/ACS Email, Serilog, OpenTelemetry. Tests: xUnit, Shouldly, NSubstitute, Testcontainers, NetArchTest. Frontend: Angular (latest stable), Angular Material, Transloco, Playwright. Tooling: Husky, lint-staged, commitlint. Infra: Docker, GitHub Actions, Bicep.
 
 **Spec:** `docs/superpowers/specs/2026-11-03-foundation-design.md` (requirements: `docs/requirements.md`)
 
@@ -16,7 +16,12 @@
 - **Branch:** work on `feat/foundation`, created from `docs/foundation-spec`. Commits follow Conventional Commits and may end with `[FR-xxx-nn]`.
 - **No commercial-license packages without a key:**
   - MediatR 13+ needs a license key. Use the free Community license and read it from config `MediatR:LicenseKey`. Its absence logs a warning only.
-  - Do **not** use FluentAssertions 8+ or AutoMapper. Use Shouldly and manual mapping instead.
+  - Do **not** use FluentAssertions 8+ (use Shouldly) or any mapping library (AutoMapper, Mapster).
+- **Data access goes through specifications (Ardalis.Specification).**
+  - Every read, both entity lookups in commands and DTO projections in queries, uses a named spec class in the feature's `Specifications/` folder.
+  - Projections are `Specification<TEntity, TResult>` with `Query.Select(...)`, so EF translates them to SQL.
+  - Handlers never write ad-hoc `.Where`/`.Select` on a `DbSet`. An architecture test enforces this.
+  - Values that SQL can't compute (for example SAS photo URLs) are projected as raw fields into a `*Row` record and finished by the handler.
 - **Central package management:** `Directory.Packages.props`. Nullable enabled, `TreatWarningsAsErrors=true`.
 - **Time:**
   - Never call `DateTime.Now`, `DateTime.UtcNow`, or `DateTimeOffset.UtcNow` outside `SystemClock`. An architecture test enforces this.
@@ -71,8 +76,11 @@ src/Gameya.Application/
   Abstractions/{IClock.cs,ICurrentUser.cs,IAppDbContext.cs,ISmsSender.cs,IEmailSender.cs,IFileStore.cs,ISecretHasher.cs,ITokenService.cs,IImageProcessor.cs,IActiveParticipationChecker.cs,ICommand.cs}
   Security/{AccessAttributes.cs,PhoneDisplay.cs,DisplayPhone.cs}
   Behaviors/{ValidationBehavior.cs,AuthorizationBehavior.cs,TransactionBehavior.cs,ActivityLogBehavior.cs}
+  Common/Specifications/SpecificationQueryExtensions.cs
   Auth/{RequestOtp.cs,VerifyOtp.cs,RefreshSession.cs,Logout.cs,LogoutAll.cs,SessionResult.cs,SessionIssuer.cs}
+  Auth/Specifications/{OtpChallengeByPhoneSpec.cs,RefreshTokenByHashSpec.cs,RefreshTokensByFamilySpec.cs,ActiveRefreshTokensByUserSpec.cs}
   Users/{GetMe.cs,UpdateProfile.cs,SetPhoto.cs,RemovePhoto.cs,ChangeEmail.cs,ResendEmailVerification.cs,VerifyEmail.cs,DeleteAccount.cs,MeDto.cs}
+  Users/Specifications/{UserByIdSpec.cs,ActiveUserByPhoneSpec.cs,UserByPendingEmailTokenSpec.cs,VerifiedEmailOwnerSpec.cs,MeRowSpec.cs}
   DependencyInjection.cs
 src/Gameya.Infrastructure/
   Persistence/{AppDbContext.cs,Configurations/*.cs,Migrations/*,ActivityLogImmutabilityInterceptor.cs,DomainEventCollector.cs}
@@ -259,6 +267,23 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
   - `interface ICommand<TResult> : IRequest<TResult>` (state-changing) and `interface IQuery<TResult> : IRequest<TResult>`.
   - Attributes `[PublicAccess]`, `[RequiresAuth]`, and `[RequiresRole(string role)]`. Exactly one per request type.
   - `interface IAppDbContext`: `DbSet<User> Users`, `DbSet<OtpChallenge> OtpChallenges`, `DbSet<RefreshToken> RefreshTokens`, `DbSet<ActivityLogEntry> ActivityLog`, `Task<int> SaveChangesAsync(CancellationToken)`, `Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken)`, `IEnumerable<Entity> TrackedEntitiesWithEvents()`.
+  - **`SpecificationQueryExtensions`** (in `Common/Specifications/`) on `IQueryable<T>`/`DbSet<T>`, evaluated with `SpecificationEvaluator.Default` from `Ardalis.Specification.EntityFrameworkCore`:
+    - `Task<T?> FirstOrDefaultAsync<T>(this DbSet<T>, ISpecification<T>, CancellationToken)`
+    - `Task<TResult?> FirstOrDefaultAsync<T, TResult>(this DbSet<T>, ISpecification<T, TResult>, CancellationToken)`
+    - `Task<List<T>> ListAsync<T>(this DbSet<T>, ISpecification<T>, CancellationToken)`
+    - `Task<List<TResult>> ListAsync<T, TResult>(this DbSet<T>, ISpecification<T, TResult>, CancellationToken)`
+    - `Task<bool> AnyAsync<T>(this DbSet<T>, ISpecification<T>, CancellationToken)`
+    - Projection specs apply `AsNoTracking()`. Entity specs stay tracked so commands can modify the result.
+  - **Spec classes**, built in the tasks that first use them:
+    - `ActiveUserByPhoneSpec(PhoneNumber)`: `DeletedAt == null`.
+    - `UserByIdSpec(Guid)`.
+    - `UserByPendingEmailTokenSpec(string hash)`.
+    - `VerifiedEmailOwnerSpec(string email, Guid excludeUserId)`.
+    - `OtpChallengeByPhoneSpec(PhoneNumber)`.
+    - `RefreshTokenByHashSpec(string hash)`.
+    - `RefreshTokensByFamilySpec(Guid familyId)`: active only.
+    - `ActiveRefreshTokensByUserSpec(Guid userId)`.
+    - `MeRowSpec(Guid userId) : Specification<User, MeRow>`.
   - `static IServiceCollection AddApplication(this IServiceCollection, IConfiguration)` registers MediatR (license key from `MediatR:LicenseKey`), validators, and behaviors in the order Validation → Authorization → Transaction → ActivityLog.
 - **Behavior semantics:**
   - **Validation:** collects FluentValidation failures and throws `ValidationFailedException(IDictionary<string,string[]>)`.
@@ -274,6 +299,10 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
   - `Registration_event_uses_actor_override_when_anonymous`.
   - `Queries_do_not_open_transactions`.
   - `AccessAttributeCoverageTests.Every_request_has_exactly_one_access_attribute`: reflects over the Application assembly for `IRequest<>` implementations. This is the spec's "authorization declared on every request" check.
+  - `SpecificationEvaluationTests` (EF Core SQLite in-memory, used only to evaluate expression translation):
+    - `Projection_spec_returns_projected_type_untracked`: a sample `Specification<User, (Guid, string?)>` returns rows, and `ChangeTracker.Entries()` is empty.
+    - `Entity_spec_returns_tracked_entity`.
+  - `tests/Gameya.ArchitectureTests/DataAccessTests.Handlers_do_not_query_DbSets_directly`: a Mono.Cecil IL scan. No method in types implementing `IRequestHandler<,>` calls `System.Linq.Queryable::Where|Select|First*|Single*|Any|Count` or `EntityFrameworkQueryableExtensions::*Async`. The spec extensions are the only permitted read path. `DbSet.Add`/`Remove` are allowed.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement the behaviors and DI.
 - [ ] **Step 4:** Run. Expected: PASS.
@@ -413,6 +442,7 @@ The Api uses minimal-API endpoint groups. The spec says "controllers", but endpo
 - Produces:
   - `IFileStore.UploadAsync(string container, string key, Stream content, string contentType, CancellationToken)`, `DeleteAsync(container, key, ct)`, and `Uri GetReadUrl(string container, string key, TimeSpan lifetime)` (SAS, 5 min). Containers: `"profile-photos"`, later `"proofs"`.
   - `IImageProcessor.ToJpeg(Stream input, int maxSize) → Stream`. Throws `FILE_TYPE_NOT_ALLOWED` unless Magick identifies the format as JPEG, PNG, or HEIC (content sniffing, not extension).
+  - `record MeRow(Guid Id, string? FullName, string PhoneE164, string? Email, DateTimeOffset? EmailVerifiedAt, string? PendingEmail, string? PhotoKey, Language Language, bool ProfileComplete)` is produced by `MeRowSpec` (SQL projection). `GetMeHandler` turns it into `MeDto`, adding `PhotoUrl = fileStore.GetReadUrl(...)` because SAS URLs can't be computed in SQL.
   - `record MeDto(Guid Id, string? FullName, string Phone, string? Email, bool EmailVerified, string? PendingEmail, Uri? PhotoUrl, string Language, bool ProfileComplete)`. `Phone` here is the caller's own E.164. This is the only place a raw phone may appear, and it's annotated `[OwnPhone]` for the Task 11 architecture test.
   - **Requests:**
     - `GetMeQuery` and `UpdateProfileCommand(string FullName, string Language)` (validator: Language ∈ {ar, en}).

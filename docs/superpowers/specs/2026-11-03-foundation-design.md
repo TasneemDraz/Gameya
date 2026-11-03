@@ -41,6 +41,7 @@ v1 is built as five sequential sub-projects, each with its own spec, plan, and i
 |---|---|
 | Architecture | Modular monolith: Clean Architecture layers, feature folders per module inside each layer |
 | Backend | ASP.NET Core (current LTS), MediatR (CQRS), FluentValidation, EF Core |
+| Data access | Specification pattern (Ardalis.Specification). Named specs for every lookup and DTO projection (`Query.Select`, translated to SQL). No mapping libraries (no AutoMapper) |
 | Database | PostgreSQL: Azure Database for PostgreSQL Flexible Server, Npgsql provider |
 | Money | `numeric(18,2)` in DB, `decimal` in code, currency code stored alongside |
 | Time | All timestamps UTC `timestamptz`. Business dates computed in `Africa/Cairo` via `IClock` + `CairoCalendar` |
