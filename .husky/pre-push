@@ -1,0 +1,1 @@
+dotnet build Gameya.sln -warnaserror && dotnet test tests/Gameya.Domain.Tests --no-build && npm --prefix src/gameya-web exec tsc -- --noEmit -p src/gameya-web/tsconfig.app.json
