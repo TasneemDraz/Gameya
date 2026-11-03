@@ -23,7 +23,9 @@ public sealed class StartupGuardTests
         ["Email:Smtp:UseStartTls"] = "true",
         ["Storage:RootPath"] = Path.Combine(Path.GetTempPath(), "gameya-guard-tests"),
         ["Storage:UrlSigningKey"] = GameyaApiFactory.UrlSigningKey,
-        ["Sms:Provider"] = "SmsGate"
+        ["Sms:Provider"] = "SmsGate",
+        ["Sms:SmsGate:Username"] = "sms-user",
+        ["Sms:SmsGate:Password"] = "sms-pass"
     };
 
     private static InvalidOperationException StartProduction(Action<Dictionary<string, string?>> change)
@@ -64,5 +66,15 @@ public sealed class StartupGuardTests
         var ex = StartProduction(s => s["Email:Smtp:UseStartTls"] = "false");
 
         ex.Message.ShouldContain("Email:Smtp:UseStartTls");
+    }
+
+    [Theory]
+    [InlineData("Sms:SmsGate:Username")]
+    [InlineData("Sms:SmsGate:Password")]
+    public void Production_SmsGate_without_credentials_fails_to_start(string key)
+    {
+        var ex = StartProduction(s => s[key] = "");
+
+        ex.Message.ShouldContain(key);
     }
 }

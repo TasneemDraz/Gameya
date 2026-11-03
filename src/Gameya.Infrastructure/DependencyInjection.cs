@@ -115,6 +115,14 @@ public static class DependencyInjection
                 services.AddSingleton<ISmsSender, LoggingSmsSender>();
                 break;
             case "SmsGate":
+                // Without credentials every OTP would answer 503 while the host still looks healthy.
+                foreach (var key in new[] { "Username", "Password" })
+                {
+                    if (string.IsNullOrWhiteSpace(configuration[$"{SmsGateOptions.Section}:{key}"]))
+                        throw new InvalidOperationException(
+                            $"{SmsGateOptions.Section}:{key} is required when Sms:Provider is 'SmsGate'.");
+                }
+
                 services.Configure<SmsGateOptions>(configuration.GetSection(SmsGateOptions.Section));
                 services.AddHttpClient<ISmsSender, SmsGateSmsSender>(c => c.Timeout = SmsGateOptions.Timeout);
                 break;
