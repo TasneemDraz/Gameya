@@ -1,7 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Lang } from '../i18n/transloco.config';
+import { SILENT_ERRORS } from './error.interceptor';
 import { Session } from './auth.store';
 
 export interface OtpRequested {
@@ -22,6 +23,10 @@ export interface Me {
 }
 
 const opts = { withCredentials: true } as const;
+const silent = {
+  withCredentials: true,
+  context: new HttpContext().set(SILENT_ERRORS, true),
+} as const;
 
 @Injectable({ providedIn: 'root' })
 export class AuthApi {
@@ -34,7 +39,7 @@ export class AuthApi {
     return this.http.post<Session>('/api/auth/otp/verify', { phone, code }, opts);
   }
   refresh(): Observable<Session> {
-    return this.http.post<Session>('/api/auth/refresh', {}, opts);
+    return this.http.post<Session>('/api/auth/refresh', {}, silent);
   }
   logout(): Observable<void> {
     return this.http.post<void>('/api/auth/logout', {}, opts);
@@ -45,8 +50,9 @@ export class AuthApi {
   verifyEmail(token: string): Observable<void> {
     return this.http.post<void>('/api/auth/email/verify', { token }, opts);
   }
-  me(): Observable<Me> {
-    return this.http.get<Me>('/api/me', opts);
+  /** `quiet` suppresses the global error snackbar, for the startup probe of anonymous visitors. */
+  me(quiet = false): Observable<Me> {
+    return this.http.get<Me>('/api/me', quiet ? silent : opts);
   }
   updateProfile(fullName: string, language: Lang): Observable<void> {
     return this.http.put<void>('/api/me/profile', { fullName, language }, opts);

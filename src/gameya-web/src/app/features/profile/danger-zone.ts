@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { filter, map, startWith, switchMap } from 'rxjs';
@@ -49,6 +50,7 @@ export class DangerZone {
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly transloco = inject(TranslocoService);
+  private readonly snack = inject(MatSnackBar);
 
   protected readonly typed = new FormControl('', { nonNullable: true });
   private readonly typedValue = toSignal(this.typed.valueChanges.pipe(startWith('')), {
@@ -67,14 +69,15 @@ export class DangerZone {
     () => this.typedValue().trim().toLowerCase() === this.word().toLowerCase(),
   );
 
+  /** A failed logout keeps the session (the cookie may still be valid) and says so, instead of looking like success. */
   protected logout(): void {
-    this.api.logout().subscribe({ complete: () => this.leave(), error: () => this.leave() });
+    this.api.logout().subscribe({ next: () => this.leave(), error: () => this.failed() });
   }
 
   protected logoutAll(): void {
     this.confirm('profile.logoutAllTitle', 'profile.logoutAllMessage', 'profile.logoutAll', false)
       .pipe(switchMap(() => this.api.logoutAll()))
-      .subscribe({ complete: () => this.leave() });
+      .subscribe({ next: () => this.leave(), error: () => this.failed() });
   }
 
   protected deleteAccount(): void {
@@ -99,6 +102,12 @@ export class DangerZone {
         filter((ok) => ok === true),
         map(() => undefined),
       );
+  }
+
+  private failed(): void {
+    this.snack.open(this.transloco.translate('profile.logoutFailed'), undefined, {
+      duration: 5000,
+    });
   }
 
   private leave(): void {

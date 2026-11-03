@@ -7,34 +7,20 @@ import {
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
-import { firstValueFrom } from 'rxjs';
 import { AuthApi } from './auth.api';
-import { AuthStore, Session } from './auth.store';
+import { AuthStore } from './auth.store';
+import { sharedRefresh } from './shared-refresh';
 
-const AUTH_PREFIX = '/api/auth/';
-let inFlight: Promise<Session> | null = null;
+/** Public endpoints: a 401 here is a real answer, and refreshing would loop (refresh) or be pointless. */
+const PUBLIC_PREFIXES = ['/api/auth/refresh', '/api/auth/otp/', '/api/auth/email/verify'];
+
+function skipsRefresh(url: string): boolean {
+  const path = url.split(/[?#]/)[0];
+  return path.endsWith('/api/auth/logout') || PUBLIC_PREFIXES.some((p) => path.includes(p));
+}
 
 function withToken(req: HttpRequest<unknown>, token: string | null): HttpRequest<unknown> {
   return token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
-}
-
-/** One refresh per tab (shared promise) and one per browser (Web Lock across tabs). */
-function sharedRefresh(api: AuthApi, store: AuthStore): Promise<Session> {
-  if (inFlight) return inFlight;
-  const run = async () => {
-    const session = await firstValueFrom(api.refresh());
-    store.setSession(session);
-    return session;
-  };
-  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
-  const p: Promise<Session> = (async () =>
-    locks ? await locks.request('gameya-refresh', run) : await run())();
-  inFlight = p;
-  const reset = () => {
-    inFlight = null;
-  };
-  p.then(reset, reset);
-  return p;
 }
 
 export const authInterceptor: HttpInterceptorFn = (req, next: HttpHandlerFn) => {
@@ -44,11 +30,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next: HttpHandlerFn) => 
 
   return next(withToken(req, store.accessToken())).pipe(
     catchError((err: unknown) => {
-      if (
-        !(err instanceof HttpErrorResponse) ||
-        err.status !== 401 ||
-        req.url.includes(AUTH_PREFIX)
-      ) {
+      if (!(err instanceof HttpErrorResponse) || err.status !== 401 || skipsRefresh(req.url)) {
         return throwError(() => err);
       }
       return from(

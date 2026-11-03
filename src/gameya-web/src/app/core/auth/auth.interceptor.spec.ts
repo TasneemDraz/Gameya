@@ -63,8 +63,11 @@ describe('authInterceptor', () => {
     let failed = false;
     http.get('/api/me').subscribe({ error: () => (failed = true) });
     ctrl.expectOne('/api/me').flush({}, { status: 401, statusText: 'Unauthorized' });
-    const refresh = await vi.waitFor(() => ctrl.expectOne('/api/auth/refresh'));
-    refresh.flush({ code: 'REFRESH_TOKEN_INVALID' }, { status: 401, statusText: 'Unauthorized' });
+    // A 401 from refresh is retried once (another tab may have rotated the cookie); the second 401 is final.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const refresh = await vi.waitFor(() => ctrl.expectOne('/api/auth/refresh'));
+      refresh.flush({ code: 'REFRESH_TOKEN_INVALID' }, { status: 401, statusText: 'Unauthorized' });
+    }
     await vi.waitFor(() => expect(failed).toBe(true));
     expect(store.isAuthenticated()).toBe(false);
     expect(navigate).toHaveBeenCalledWith('/login');
@@ -76,4 +79,41 @@ describe('authInterceptor', () => {
     ctrl.expectOne('/api/auth/otp/verify').flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(status).toBe(401);
   });
+
+  it('refreshes and retries /api/auth/logout-all after an expired access token', async () => {
+    let done = false;
+    http.post('/api/auth/logout-all', {}).subscribe(() => (done = true));
+    const first = ctrl.expectOne('/api/auth/logout-all');
+    expect(first.request.headers.get('Authorization')).toBe('Bearer old');
+    first.flush({}, { status: 401, statusText: 'Unauthorized' });
+
+    const refresh = await vi.waitFor(() => ctrl.expectOne('/api/auth/refresh'));
+    refresh.flush(session('new'));
+
+    const retry = await vi.waitFor(() => ctrl.expectOne('/api/auth/logout-all'));
+    expect(retry.request.headers.get('Authorization')).toBe('Bearer new');
+    retry.flush(null, { status: 204, statusText: 'No Content' });
+    await vi.waitFor(() => expect(done).toBe(true));
+  });
+
+  it('does not start another refresh when a request to the refresh endpoint answers 401', () => {
+    let status = 0;
+    http.post('/api/auth/refresh', {}).subscribe({ error: (e) => (status = e.status) });
+    ctrl
+      .expectOne('/api/auth/refresh')
+      .flush({ code: 'REFRESH_TOKEN_INVALID' }, { status: 401, statusText: 'Unauthorized' });
+    expect(status).toBe(401);
+    ctrl.expectNone('/api/auth/refresh');
+  });
+
+  it.each(['/api/auth/logout', '/api/auth/email/verify'])(
+    'does not try to refresh a 401 from %s',
+    (url) => {
+      let status = 0;
+      http.post(url, {}).subscribe({ error: (e) => (status = e.status) });
+      ctrl.expectOne(url).flush({}, { status: 401, statusText: 'Unauthorized' });
+      expect(status).toBe(401);
+      ctrl.expectNone('/api/auth/refresh');
+    },
+  );
 });
