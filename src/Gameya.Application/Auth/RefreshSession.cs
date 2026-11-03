@@ -12,6 +12,12 @@ namespace Gameya.Application.Auth;
 [PublicAccess]
 public sealed record RefreshSessionCommand(string RefreshToken) : ICommand<SessionResult>;
 
+/// <summary>
+/// REFRESH_TOKEN_INVALID for a rotated token presented inside the grace window. On the wire it is the same
+/// 401 as any invalid token; the type only tells the endpoint not to clear a cookie that is already the successor.
+/// </summary>
+public sealed class RotatedWithinGraceException() : DomainException(ErrorCodes.REFRESH_TOKEN_INVALID);
+
 public sealed class RefreshSessionHandler(
     IAppDbContext db, ISecretHasher hasher, SessionIssuer sessions, IClock clock)
     : IRequestHandler<RefreshSessionCommand, SessionResult>
@@ -28,11 +34,16 @@ public sealed class RefreshSessionHandler(
 
         if (token.RevokedAt is not null)
         {
-            // Revoked without a successor (logout or a revoked family): nothing new to learn. A rotated
-            // token inside the grace window is a concurrent tab, not theft.
-            if (token.ReplacedByTokenId is null || token.WasRotatedWithin(Grace, now))
+            // Revoked without a successor (logout or a revoked family): nothing new to learn.
+            if (token.ReplacedByTokenId is null)
             {
                 throw new DomainException(ErrorCodes.REFRESH_TOKEN_INVALID);
+            }
+
+            // A rotated token inside the grace window is a concurrent tab, not theft.
+            if (token.WasRotatedWithin(Grace, now))
+            {
+                throw new RotatedWithinGraceException();
             }
 
             // Rotated token replayed after the window is a theft signal: kill the whole family. The flag makes the transaction behavior commit

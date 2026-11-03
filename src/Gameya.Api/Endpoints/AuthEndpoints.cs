@@ -5,6 +5,7 @@ using Gameya.Domain.Auth;
 using Gameya.Domain.Common;
 using Gameya.Domain.Users;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Gameya.Api.Endpoints;
 
@@ -46,7 +47,16 @@ public static class AuthEndpoints
                 RefreshCookie.Write(http.Response, result.RefreshToken, clock.UtcNow + RefreshToken.Lifetime);
                 return Results.Ok(new { result.AccessToken, result.AccessTokenExpiresAt, result.ProfileComplete });
             }
-            catch (DomainException ex) when (ex.Code is ErrorCodes.REFRESH_TOKEN_INVALID or ErrorCodes.REFRESH_TOKEN_REUSED)
+            catch (Exception ex) when (ex is RotatedWithinGraceException or DbUpdateConcurrencyException)
+            {
+                // A concurrent tab already rotated this token; the cookie it holds is the live successor,
+                // so it must not be cleared.
+                await ProblemDetailsMapping.WriteAsync(
+                    http, StatusCodes.Status401Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID, ct: ct);
+                return Results.Empty;
+            }
+            catch (DomainException ex) when (ex.Code is ErrorCodes.REFRESH_TOKEN_INVALID or ErrorCodes.REFRESH_TOKEN_REUSED
+                                                 or ErrorCodes.USER_BLOCKED)
             {
                 // Written here rather than thrown: the exception handler resets response headers,
                 // which would drop the cookie deletion.

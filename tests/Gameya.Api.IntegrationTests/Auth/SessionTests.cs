@@ -129,6 +129,45 @@ public sealed class SessionTests : IDisposable
         (await Refresh(b)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    private static bool DeletesCookie(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Set-Cookie", out var values)
+        && values.Any(v => v.StartsWith(CookiePrefix, StringComparison.Ordinal));
+
+    [Fact]
+    public async Task Grace_window_rejection_does_not_clear_the_cookie_but_other_failures_do()
+    {
+        var a = (await Login()).RefreshToken;
+        (await Refresh(a)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        _factory.Clock.Advance(TimeSpan.FromSeconds(5));
+        var grace = await Refresh(a);
+        await ShouldFailWith(grace, HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+        DeletesCookie(grace).ShouldBeFalse();
+
+        var unknown = await Refresh("not-a-real-token");
+        await ShouldFailWith(unknown, HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+        DeletesCookie(unknown).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Parallel_refreshes_of_one_token_yield_a_single_winner_and_do_not_fork_the_family()
+    {
+        var session = await Login();
+
+        var responses = await Task.WhenAll(Refresh(session.RefreshToken), Refresh(session.RefreshToken));
+
+        var winners = responses.Where(r => r.StatusCode == HttpStatusCode.OK).ToList();
+        var losers = responses.Where(r => r.StatusCode != HttpStatusCode.OK).ToList();
+        winners.Count.ShouldBe(1);
+        var loser = losers.Single();
+        await ShouldFailWith(loser, HttpStatusCode.Unauthorized, ErrorCodes.REFRESH_TOKEN_INVALID);
+        DeletesCookie(loser).ShouldBeFalse();
+
+        var userId = Guid.Parse(new JsonWebTokenHandler().ReadJsonWebToken(session.AccessToken).Subject);
+        await using var ctx = _db.CreateAppContext();
+        (await ctx.RefreshTokens.CountAsync(t => t.UserId == userId && t.RevokedAt == null)).ShouldBe(1);
+    }
+
     [Fact]
     public async Task Refresh_extends_expiry_sliding_30_days()
     {
