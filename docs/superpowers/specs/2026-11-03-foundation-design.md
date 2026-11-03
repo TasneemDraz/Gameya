@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Status:** Draft, awaiting review
-- **Source requirements:** `.claude/gameya-requirements.md` (v1)
+- **Source requirements:** `docs/requirements.md` (v1)
 
 ---
 
