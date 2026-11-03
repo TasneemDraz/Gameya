@@ -47,6 +47,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
+app.MapMeEndpoints();
+app.MapFileEndpoints();
 if (app.Environment.IsDevelopmentOrE2E())
 {
     app.MapDevEndpoints();

@@ -11,6 +11,11 @@ namespace Gameya.Api.IntegrationTests;
 /// <summary>Hosts the API in the E2E environment against the Testcontainers database, as the gameya_app role.</summary>
 public sealed class GameyaApiFactory(PostgresFixture database) : WebApplicationFactory<Program>
 {
+    public const string UrlSigningKey = "test-url-signing-key-0123456789abcdef0123456789";
+
+    /// <summary>A temp directory per factory, so tests never share stored files.</summary>
+    public string StorageRoot { get; } = Path.Combine(Path.GetTempPath(), "gameya-tests-" + Guid.NewGuid().ToString("N"));
+
     public MutableClock Clock { get; } = new(new DateTimeOffset(2026, 11, 3, 10, 0, 0, TimeSpan.Zero));
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -20,6 +25,8 @@ public sealed class GameyaApiFactory(PostgresFixture database) : WebApplicationF
         builder.UseSetting("ConnectionStrings:Migrator", database.MigratorConnectionString);
         builder.UseSetting("Sms:Provider", "Logging");
         builder.UseSetting("Security:HashKey", "test-hash-key-0123456789abcdef0123456789abcdef");
+        builder.UseSetting("Storage:RootPath", StorageRoot);
+        builder.UseSetting("Storage:UrlSigningKey", UrlSigningKey);
         builder.UseSetting("Jwt:Issuer", "gameya-tests");
         builder.UseSetting("Jwt:Audience", "gameya-tests");
         builder.UseSetting("Jwt:SigningKey", "test-signing-key-0123456789abcdef0123456789abcdef");
@@ -29,5 +36,14 @@ public sealed class GameyaApiFactory(PostgresFixture database) : WebApplicationF
             services.RemoveAll<IClock>();
             services.AddSingleton<IClock>(Clock);
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing && Directory.Exists(StorageRoot))
+        {
+            Directory.Delete(StorageRoot, recursive: true);
+        }
     }
 }

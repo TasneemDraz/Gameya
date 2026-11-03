@@ -14,9 +14,12 @@ public class ActivityLogImmutabilityTests(PostgresFixture fixture)
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 3, 10, 0, 0, TimeSpan.Zero);
 
-    private sealed class IdProjectionSpec : Specification<User, Guid>
+    // Embeds the entity itself in the projection: the only kind of projection EF would track without AsNoTracking.
+    private sealed record UserHolder(User User);
+
+    private sealed class UserHolderSpec : Specification<User, UserHolder>
     {
-        public IdProjectionSpec() => Query.Select(u => u.Id);
+        public UserHolderSpec(Guid id) => Query.Where(u => u.Id == id).Select(u => new UserHolder(u));
     }
 
     private static string UniquePhone() => "010" + Random.Shared.Next(10_000_000, 99_999_999);
@@ -92,16 +95,19 @@ public class ActivityLogImmutabilityTests(PostgresFixture fixture)
     [Fact]
     public async Task Projection_specs_are_untracked()
     {
+        var id = Guid.NewGuid();
         await using (var seed = fixture.CreateAppContext())
         {
-            seed.Users.Add(User.Register(Guid.NewGuid(), PhoneNumber.Parse(UniquePhone()), Language.Ar, Now));
+            seed.Users.Add(User.Register(id, PhoneNumber.Parse(UniquePhone()), Language.Ar, Now));
             await seed.SaveChangesAsync();
         }
 
         await using var db = fixture.CreateAppContext();
-        var ids = await db.Users.ListAsync(new IdProjectionSpec(), CancellationToken.None);
+        (await db.Users.ListAsync(new MeRowSpec(id), CancellationToken.None)).Count.ShouldBe(1);
+        (await db.Users.ListAsync(new UserHolderSpec(id), CancellationToken.None)).Count.ShouldBe(1);
 
-        ids.ShouldNotBeEmpty();
+        // A scalar-only projection (MeRowSpec) is never tracked, so UserHolderSpec is what makes this meaningful:
+        // without AsNoTracking in BuildProjectionQuery the entity it carries would be tracked.
         db.ChangeTracker.Entries().ShouldBeEmpty();
     }
 

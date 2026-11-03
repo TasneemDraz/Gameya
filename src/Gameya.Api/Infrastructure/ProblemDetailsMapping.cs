@@ -26,6 +26,9 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
             case DomainException d:
                 await WriteAsync(context, StatusFor(d.Code), d.Code, d.Params, ct: ct);
                 break;
+            case BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge }:
+                await WriteAsync(context, StatusCodes.Status413PayloadTooLarge, ErrorCodes.FILE_TOO_LARGE, ct: ct);
+                break;
             case BadHttpRequestException:
                 await WriteAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.VALIDATION_FAILED, ct: ct);
                 break;
@@ -52,6 +55,7 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
             StatusCodes.Status401Unauthorized,
         ErrorCodes.FORBIDDEN or ErrorCodes.USER_BLOCKED => StatusCodes.Status403Forbidden,
         ErrorCodes.NOT_FOUND => StatusCodes.Status404NotFound,
+        ErrorCodes.FILE_TOO_LARGE => StatusCodes.Status413PayloadTooLarge,
         ErrorCodes.OTP_LOCKED or ErrorCodes.OTP_RESEND_TOO_SOON or ErrorCodes.OTP_RESEND_LIMIT
             or ErrorCodes.EMAIL_RESEND_LIMIT => StatusCodes.Status429TooManyRequests,
         ErrorCodes.ACCOUNT_HAS_ACTIVE_GAMEYAS or ErrorCodes.EMAIL_IN_USE => StatusCodes.Status409Conflict,

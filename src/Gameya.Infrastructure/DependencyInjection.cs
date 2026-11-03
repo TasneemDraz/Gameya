@@ -1,4 +1,5 @@
 using Gameya.Application.Abstractions;
+using Gameya.Infrastructure.Files;
 using Gameya.Infrastructure.Persistence;
 using Gameya.Infrastructure.Security;
 using Gameya.Infrastructure.Sms;
@@ -45,8 +46,35 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
 
         AddSms(services, configuration, environment);
+        AddFiles(services, configuration, environment);
 
         return services;
+    }
+
+    /// <summary>
+    /// <c>Storage:UrlSigningKey</c> (at least 32 bytes) and <c>Storage:RootPath</c> are required. Development and
+    /// E2E fall back to a per-process random key (links live five minutes) and a folder under the content root.
+    /// </summary>
+    private static void AddFiles(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    {
+        var signingKey = configuration["Storage:UrlSigningKey"];
+        if (string.IsNullOrEmpty(signingKey) && environment.IsDevelopmentOrE2E())
+            signingKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        if (string.IsNullOrEmpty(signingKey) || System.Text.Encoding.UTF8.GetByteCount(signingKey) < 32)
+            throw new InvalidOperationException("Storage:UrlSigningKey must be configured with at least 32 bytes.");
+
+        var rootPath = configuration["Storage:RootPath"];
+        if (string.IsNullOrWhiteSpace(rootPath))
+        {
+            if (!environment.IsDevelopmentOrE2E())
+                throw new InvalidOperationException("Storage:RootPath is not configured.");
+            rootPath = Path.Combine(environment.ContentRootPath, ".data", "files");
+        }
+
+        services.AddSingleton(sp => new SignedFileUrls(signingKey, sp.GetRequiredService<IClock>()));
+        services.AddSingleton<IFileStore>(sp =>
+            new LocalFileStore(Path.GetFullPath(rootPath), sp.GetRequiredService<SignedFileUrls>()));
+        services.AddSingleton<IImageProcessor, MagickImageProcessor>();
     }
 
     private static void AddSms(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
