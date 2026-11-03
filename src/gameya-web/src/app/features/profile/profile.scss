@@ -1,0 +1,72 @@
+:host {
+  display: block;
+}
+
+.title {
+  margin-block: 0 8px;
+  font-size: 1.5rem;
+}
+
+.phone {
+  margin: 0;
+  text-align: start;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  margin-block-end: 16px;
+  border: 1px solid var(--gy-border, #c4c7c5);
+  border-radius: 12px;
+}
+
+.card h3 {
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-block-end: 12px;
+}
+
+.field input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding: 12px;
+  font: inherit;
+  border: 1px solid currentcolor;
+  border-radius: 8px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.error {
+  margin: 0;
+  color: #b3261e;
+  font-size: 0.875rem;
+}
+
+.photo {
+  inline-size: 72px;
+  block-size: 72px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.destructive {
+  color: #b3261e;
+}

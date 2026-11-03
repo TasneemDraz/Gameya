@@ -38,7 +38,12 @@ const WIDE_QUERY = '(min-width: 960px)';
       <mat-sidenav-container class="shell">
         <mat-sidenav mode="side" opened class="side">
           <nav class="side-nav" [attr.aria-label]="'app.navigation' | transloco">
-            <a mat-button routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+            <a
+              mat-button
+              routerLink="/profile"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: true }"
+            >
               <mat-icon>home</mat-icon>
               {{ 'nav.home' | transloco }}
             </a>
@@ -49,7 +54,11 @@ const WIDE_QUERY = '(min-width: 960px)';
     } @else {
       <main class="content"><router-outlet /></main>
       <nav class="bottom-nav" [attr.aria-label]="'app.navigation' | transloco">
-        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+        <a
+          routerLink="/profile"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
           <mat-icon>home</mat-icon>
           <span>{{ 'nav.home' | transloco }}</span>
         </a>

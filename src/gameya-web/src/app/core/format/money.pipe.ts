@@ -8,6 +8,8 @@ export class MoneyPipe implements PipeTransform {
   transform(amount: number | string | null | undefined): string {
     if (amount === null || amount === undefined || amount === '') return '';
     const locale = this.lang.current() === 'ar' ? 'ar-EG' : 'en-EG';
-    return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EGP' }).format(Number(amount));
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EGP' }).format(
+      Number(amount),
+    );
   }
 }

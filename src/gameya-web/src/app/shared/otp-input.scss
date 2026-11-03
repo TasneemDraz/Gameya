@@ -1,0 +1,17 @@
+.boxes {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+input {
+  box-sizing: border-box;
+  inline-size: 44px;
+  block-size: 52px;
+  padding: 0;
+  font: inherit;
+  font-size: 1.5rem;
+  text-align: center;
+  border: 1px solid currentcolor;
+  border-radius: 8px;
+}

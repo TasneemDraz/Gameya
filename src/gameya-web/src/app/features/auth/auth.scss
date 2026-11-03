@@ -1,0 +1,43 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.375rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding: 12px;
+  font: inherit;
+  border: 1px solid currentcolor;
+  border-radius: 8px;
+}
+
+.error {
+  margin: 0;
+  color: #b3261e;
+  font-size: 0.875rem;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.notice {
+  padding: 12px;
+  margin: 0;
+  background: var(--gy-info-bg, #e8f0fe);
+  border-radius: 8px;
+}
