@@ -11,6 +11,8 @@ public static class MeEndpoints
 
     public sealed record UpdateProfileBody(string? FullName, string? Language);
 
+    public sealed record ChangeEmailBody(string? Email);
+
     public static IEndpointRouteBuilder MapMeEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/me");
@@ -21,6 +23,18 @@ public static class MeEndpoints
         {
             await sender.Send(new UpdateProfileCommand(body.FullName ?? "", body.Language ?? ""), ct);
             return Results.NoContent();
+        });
+
+        group.MapPut("/email", async (ChangeEmailBody body, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new ChangeEmailCommand(body.Email ?? ""), ct);
+            return Results.Accepted();
+        });
+
+        group.MapPost("/email/resend", async (ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new ResendEmailVerificationCommand(), ct);
+            return Results.Accepted();
         });
 
         group.MapPut("/photo", async (IFormFile file, ISender sender, CancellationToken ct) =>

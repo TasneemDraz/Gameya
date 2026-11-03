@@ -32,6 +32,9 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
             case BadHttpRequestException:
                 await WriteAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.VALIDATION_FAILED, ct: ct);
                 break;
+            case DbUpdateException when IsUserEmailConflict(exception):
+                await WriteAsync(context, StatusCodes.Status409Conflict, ErrorCodes.EMAIL_IN_USE, ct: ct);
+                break;
             case DbUpdateConcurrencyException:
             case DbUpdateException when IsOtpChallengePhoneConflict(exception):
                 await WriteAsync(context, StatusCodes.Status409Conflict, ErrorCodes.CONCURRENCY_CONFLICT, ct: ct);
@@ -48,6 +51,10 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
     /// <summary>True for the unique-index violation raised when two requests create the same phone's challenge.</summary>
     public static bool IsOtpChallengePhoneConflict(Exception exception) =>
         exception is DbUpdateException { InnerException: PostgresException { SqlState: UniqueViolation, TableName: "otp_challenges" } };
+
+    /// <summary>True for the unique-index violation raised when two accounts verify the same email concurrently.</summary>
+    public static bool IsUserEmailConflict(Exception exception) =>
+        exception is DbUpdateException { InnerException: PostgresException { SqlState: UniqueViolation, ConstraintName: "ix_users_email" } };
 
     public static int StatusFor(string code) => code switch
     {

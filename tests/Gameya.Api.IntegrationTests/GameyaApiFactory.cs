@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Gameya.Api.IntegrationTests;
 
 /// <summary>Hosts the API in the E2E environment against the Testcontainers database, as the gameya_app role.</summary>
-public sealed class GameyaApiFactory(PostgresFixture database) : WebApplicationFactory<Program>
+public sealed class GameyaApiFactory(PostgresFixture database, MailpitFixture? mail = null) : WebApplicationFactory<Program>
 {
     public const string UrlSigningKey = "test-url-signing-key-0123456789abcdef0123456789";
 
@@ -25,6 +25,12 @@ public sealed class GameyaApiFactory(PostgresFixture database) : WebApplicationF
         builder.UseSetting("ConnectionStrings:Migrator", database.MigratorConnectionString);
         builder.UseSetting("Sms:Provider", "Logging");
         builder.UseSetting("Security:HashKey", "test-hash-key-0123456789abcdef0123456789abcdef");
+        builder.UseSetting("App:WebBaseUrl", "https://app.gameya.test");
+        builder.UseSetting("Email:From", "Gam'eya <noreply@gameya.test>");
+        // Without a Mailpit fixture, port 1 refuses connections, so a send fails fast instead of reaching a real server.
+        builder.UseSetting("Email:Smtp:Host", mail?.Host ?? "127.0.0.1");
+        builder.UseSetting("Email:Smtp:Port", (mail?.SmtpPort ?? 1).ToString());
+        builder.UseSetting("Email:Smtp:UseStartTls", "false");
         builder.UseSetting("Storage:RootPath", StorageRoot);
         builder.UseSetting("Storage:UrlSigningKey", UrlSigningKey);
         builder.UseSetting("Jwt:Issuer", "gameya-tests");

@@ -1,4 +1,5 @@
 using Gameya.Application.Abstractions;
+using Gameya.Infrastructure.Email;
 using Gameya.Infrastructure.Files;
 using Gameya.Infrastructure.Persistence;
 using Gameya.Infrastructure.Security;
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
 
         AddSms(services, configuration, environment);
+        AddEmail(services, configuration, environment);
         AddFiles(services, configuration, environment);
 
         return services;
@@ -75,6 +77,23 @@ public static class DependencyInjection
         services.AddSingleton<IFileStore>(sp =>
             new LocalFileStore(Path.GetFullPath(rootPath), sp.GetRequiredService<SignedFileUrls>()));
         services.AddSingleton<IImageProcessor, MagickImageProcessor>();
+    }
+
+    /// <summary>
+    /// One SMTP sender everywhere. Outside Development and E2E the connection must use STARTTLS.
+    /// </summary>
+    private static void AddEmail(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    {
+        var options = configuration.GetSection(EmailOptions.Section).Get<EmailOptions>() ?? new EmailOptions();
+        if (string.IsNullOrWhiteSpace(options.From) || string.IsNullOrWhiteSpace(options.Smtp.Host))
+            throw new InvalidOperationException("Email:From and Email:Smtp:Host must be configured.");
+        if (!options.Smtp.UseStartTls && !environment.IsDevelopmentOrE2E())
+            throw new InvalidOperationException("Email:Smtp:UseStartTls must be true outside Development and E2E.");
+        if (string.IsNullOrWhiteSpace(configuration["App:WebBaseUrl"]))
+            throw new InvalidOperationException("App:WebBaseUrl must be configured.");
+
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.Section));
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
     }
 
     private static void AddSms(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)

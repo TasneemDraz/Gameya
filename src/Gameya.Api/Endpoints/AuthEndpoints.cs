@@ -1,6 +1,7 @@
 using Gameya.Api.Infrastructure;
 using Gameya.Application.Abstractions;
 using Gameya.Application.Auth;
+using Gameya.Application.Users;
 using Gameya.Domain.Auth;
 using Gameya.Domain.Common;
 using Gameya.Domain.Users;
@@ -14,6 +15,8 @@ public static class AuthEndpoints
     public sealed record RequestOtpBody(string? Phone, Language Language = Language.Ar);
 
     public sealed record VerifyOtpBody(string? Phone, string? Code);
+
+    public sealed record VerifyEmailBody(string? Token);
 
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -64,6 +67,12 @@ public static class AuthEndpoints
                 await ProblemDetailsMapping.WriteAsync(http, ProblemDetailsMapping.StatusFor(ex.Code), ex.Code, ct: ct);
                 return Results.Empty;
             }
+        });
+
+        session.MapPost("/email/verify", async (VerifyEmailBody body, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new VerifyEmailCommand(body.Token ?? ""), ct);
+            return Results.NoContent();
         });
 
         session.MapPost("/logout", async (ISender sender, HttpContext http, CancellationToken ct) =>

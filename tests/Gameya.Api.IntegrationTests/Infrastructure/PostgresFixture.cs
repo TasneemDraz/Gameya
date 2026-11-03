@@ -5,7 +5,7 @@ using Testcontainers.PostgreSql;
 namespace Gameya.Api.IntegrationTests.Infrastructure;
 
 [CollectionDefinition(Name)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
+public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>, ICollectionFixture<MailpitFixture>
 {
     public const string Name = "postgres";
 }
