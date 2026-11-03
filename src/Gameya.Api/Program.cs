@@ -12,6 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddGameyaForwardedHeaders(builder.Configuration);
 builder.AddObservability();
 builder.Services.AddBackgroundJobs(builder.Configuration);
 builder.Services.AddGameyaHealthChecks();
@@ -48,6 +49,7 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseObservability();
 app.UseExceptionHandler();
 app.UseRateLimiter();
