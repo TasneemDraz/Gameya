@@ -1,0 +1,78 @@
+name: Backup
+
+# Nightly export of each environment's SQL Server database as a .bacpac, uploaded to Backblaze B2 under db/.
+# Uploaded photos already live in a B2 bucket (keep-all-versions + 35-day lifecycle rule), so they need no copy.
+# Secrets are per GitHub Environment; see docs/deployment.md.
+on:
+  schedule:
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  backup:
+    name: backup (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ matrix.env }}
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [staging, production]
+    steps:
+      - name: Check required secrets
+        env:
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
+          B2_BACKUP_BUCKET: ${{ secrets.B2_BACKUP_BUCKET }}
+        run: |
+          bad=0
+          for name in DB_CONNECTION_STRING B2_KEY_ID B2_APP_KEY B2_BACKUP_BUCKET; do
+            if [[ -z "${!name// }" ]]; then
+              echo "::error::required secret $name is empty or not set"
+              bad=1
+            fi
+          done
+          exit "$bad"
+
+      - name: Install sqlpackage
+        run: |
+          dotnet tool install -g microsoft.sqlpackage
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Install rclone
+        run: curl -fsS https://rclone.org/install.sh | sudo bash
+
+      - name: Export the database
+        env:
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+        run: |
+          ts="$(date -u +%Y%m%dT%H%M%SZ)"
+          echo "BACKUP_FILE=gameya-$ts.bacpac" >> "$GITHUB_ENV"
+          sqlpackage /a:Export /scs:"$DB_CONNECTION_STRING" /tf:"gameya-$ts.bacpac"
+
+      - name: Upload to Backblaze B2
+        env:
+          # rclone reads its remote from env, so there is no config file holding the key.
+          RCLONE_CONFIG_B2_TYPE: b2
+          RCLONE_CONFIG_B2_ACCOUNT: ${{ secrets.B2_KEY_ID }}
+          RCLONE_CONFIG_B2_KEY: ${{ secrets.B2_APP_KEY }}
+          B2_BACKUP_BUCKET: ${{ secrets.B2_BACKUP_BUCKET }}
+        run: |
+          # copyto, never sync: nothing already in the bucket is deleted.
+          rclone copyto "$BACKUP_FILE" "b2:$B2_BACKUP_BUCKET/db/$BACKUP_FILE"
+
+      - name: Ping the monitor
+        env:
+          BACKUP_PING_URL: ${{ secrets.BACKUP_PING_URL }}
+        run: |
+          if [[ -n "${BACKUP_PING_URL// }" ]]; then
+            curl -fsS --max-time 10 --retry 3 "$BACKUP_PING_URL" > /dev/null || echo "::warning::backup ping failed"
+          fi
