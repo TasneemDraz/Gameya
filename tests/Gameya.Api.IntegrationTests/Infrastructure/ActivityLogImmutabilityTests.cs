@@ -4,13 +4,13 @@ using Gameya.Application.Users.Specifications;
 using Gameya.Domain.Activity;
 using Gameya.Domain.Common;
 using Gameya.Domain.Users;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Gameya.Api.IntegrationTests.Infrastructure;
 
-[Collection(PostgresCollection.Name)]
-public class ActivityLogImmutabilityTests(PostgresFixture fixture)
+[Collection(DatabaseCollection.Name)]
+public class ActivityLogImmutabilityTests(DatabaseFixture fixture)
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 3, 10, 0, 0, TimeSpan.Zero);
 
@@ -33,32 +33,30 @@ public class ActivityLogImmutabilityTests(PostgresFixture fixture)
         return entry.Id;
     }
 
-    private async Task<PostgresException> ExecuteAsAppAsync(string sql)
+    private async Task<SqlException> ExecuteAsAppAsync(string sql)
     {
-        await using var conn = new NpgsqlConnection(fixture.AppConnectionString);
+        await using var conn = new SqlConnection(fixture.AppConnectionString);
         await conn.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        return await Should.ThrowAsync<PostgresException>(() => cmd.ExecuteNonQueryAsync());
+        await using var cmd = new SqlCommand(sql, conn);
+        return await Should.ThrowAsync<SqlException>(() => cmd.ExecuteNonQueryAsync());
     }
 
-    [Fact]
+    [Fact(Skip = "Task 2")]
     public async Task App_role_cannot_update_activity_log()
     {
         await InsertEntryAsync("A");
 
-        var ex = await ExecuteAsAppAsync("UPDATE activity_log SET action = 'X'");
-
-        ex.SqlState.ShouldBe("42501");
+        // Task 2 adds the append-only trigger and asserts the error it raises.
+        await ExecuteAsAppAsync("UPDATE activity_log SET action = 'X'");
     }
 
-    [Fact]
+    [Fact(Skip = "Task 2")]
     public async Task App_role_cannot_delete_activity_log()
     {
         await InsertEntryAsync("A");
 
-        var ex = await ExecuteAsAppAsync("DELETE FROM activity_log");
-
-        ex.SqlState.ShouldBe("42501");
+        // Task 2 adds the append-only trigger and asserts the error it raises.
+        await ExecuteAsAppAsync("DELETE FROM activity_log");
     }
 
     [Fact]

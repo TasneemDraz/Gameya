@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Hangfire;
 using Hangfire.Dashboard;
-using Hangfire.PostgreSql;
+using Hangfire.SqlServer;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -68,8 +68,8 @@ public static class Observability
     }
 
     /// <summary>
-    /// Hangfire runs in-process on the <c>hangfire</c> schema (owned by the runtime role), so the App connection
-    /// string is used. No jobs are defined in Foundation; later sub-projects add them.
+    /// Hangfire runs in-process on SQL Server schema <c>hangfire</c>, which it creates and upgrades itself on
+    /// startup, through the App connection string. No jobs are defined in Foundation; later sub-projects add them.
     /// </summary>
     public static IServiceCollection AddBackgroundJobs(this IServiceCollection services, IConfiguration configuration)
     {
@@ -80,9 +80,9 @@ public static class Observability
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
-            .UsePostgreSqlStorage(
-                o => o.UseNpgsqlConnection(connectionString),
-                new PostgreSqlStorageOptions { SchemaName = "hangfire" }));
+            .UseSqlServerStorage(
+                connectionString,
+                new SqlServerStorageOptions { SchemaName = "hangfire", PrepareSchemaIfNecessary = true }));
         services.AddHangfireServer(o => o.WorkerCount = 4);
         return services;
     }

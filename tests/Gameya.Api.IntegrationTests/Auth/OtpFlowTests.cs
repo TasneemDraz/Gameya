@@ -13,14 +13,14 @@ using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Gameya.Api.IntegrationTests.Auth;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class OtpFlowTests : IDisposable
 {
-    private readonly PostgresFixture _db;
+    private readonly DatabaseFixture _db;
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public OtpFlowTests(PostgresFixture db)
+    public OtpFlowTests(DatabaseFixture db)
     {
         _db = db;
         _factory = new GameyaApiFactory(db);

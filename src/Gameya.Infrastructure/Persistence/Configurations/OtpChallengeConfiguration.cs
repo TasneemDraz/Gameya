@@ -18,7 +18,7 @@ public sealed class OtpChallengeConfiguration : IEntityTypeConfiguration<OtpChal
         builder.Property(c => c.Phone).HasConversion(PhoneNumberConverter.Instance);
         builder.HasIndex(c => c.Phone).IsUnique();
 
-        // Optimistic concurrency via PostgreSQL's xmin system column.
-        builder.Property<uint>("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        // Optimistic concurrency via a SQL Server rowversion column.
+        builder.Property<byte[]>("row_version").IsRowVersion();
     }
 }

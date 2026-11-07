@@ -12,17 +12,17 @@ using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Gameya.Api.IntegrationTests.Users;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class DeleteAccountTests : IDisposable
 {
     private const string CookiePrefix = "gameya_rt=";
 
-    private readonly PostgresFixture _db;
+    private readonly DatabaseFixture _db;
     private readonly MailpitFixture _mail;
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public DeleteAccountTests(PostgresFixture db, MailpitFixture mail)
+    public DeleteAccountTests(DatabaseFixture db, MailpitFixture mail)
     {
         _db = db;
         _mail = mail;

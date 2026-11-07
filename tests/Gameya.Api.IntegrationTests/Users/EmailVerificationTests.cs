@@ -8,15 +8,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Gameya.Api.IntegrationTests.Users;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class EmailVerificationTests : IDisposable
 {
-    private readonly PostgresFixture _db;
+    private readonly DatabaseFixture _db;
     private readonly MailpitFixture _mail;
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public EmailVerificationTests(PostgresFixture db, MailpitFixture mail)
+    public EmailVerificationTests(DatabaseFixture db, MailpitFixture mail)
     {
         _db = db;
         _mail = mail;

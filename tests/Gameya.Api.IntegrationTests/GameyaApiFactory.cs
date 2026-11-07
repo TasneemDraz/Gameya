@@ -11,9 +11,9 @@ using Serilog.Core;
 namespace Gameya.Api.IntegrationTests;
 
 /// <summary>Hosts the API in the E2E environment against the Testcontainers database, as the gameya_app role.</summary>
-public sealed class GameyaApiFactory(PostgresFixture database, MailpitFixture? mail = null, string? storageRoot = null) : WebApplicationFactory<Program>
+public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? mail = null, string? storageRoot = null) : WebApplicationFactory<Program>
 {
-    public PostgresFixture Database => database;
+    public DatabaseFixture Database => database;
 
     public const string UrlSigningKey = "test-url-signing-key-0123456789abcdef0123456789";
 

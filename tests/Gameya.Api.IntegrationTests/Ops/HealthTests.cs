@@ -3,14 +3,14 @@ using Gameya.Api.IntegrationTests.Infrastructure;
 
 namespace Gameya.Api.IntegrationTests.Ops;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class HealthTests : IDisposable
 {
-    private readonly PostgresFixture _db;
+    private readonly DatabaseFixture _db;
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public HealthTests(PostgresFixture db)
+    public HealthTests(DatabaseFixture db)
     {
         _db = db;
         _factory = new GameyaApiFactory(db);
@@ -32,7 +32,7 @@ public sealed class HealthTests : IDisposable
         var body = await TestApi.JsonAsync(response);
         body.GetProperty("status").GetString().ShouldBe("Healthy");
         var entries = body.GetProperty("entries");
-        entries.EnumerateObject().Select(e => e.Name).Order().ToArray().ShouldBe(["files", "hangfire", "postgres"]);
+        entries.EnumerateObject().Select(e => e.Name).Order().ToArray().ShouldBe(["database", "files", "hangfire"]);
         foreach (var entry in entries.EnumerateObject())
         {
             entry.Value.GetProperty("status").GetString().ShouldBe("Healthy", entry.Name);
@@ -55,7 +55,7 @@ public sealed class HealthTests : IDisposable
             response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
             var entries = (await TestApi.JsonAsync(response)).GetProperty("entries");
             entries.GetProperty("files").GetProperty("status").GetString().ShouldBe("Unhealthy");
-            entries.GetProperty("postgres").GetProperty("status").GetString().ShouldBe("Healthy");
+            entries.GetProperty("database").GetProperty("status").GetString().ShouldBe("Healthy");
         }
         finally
         {

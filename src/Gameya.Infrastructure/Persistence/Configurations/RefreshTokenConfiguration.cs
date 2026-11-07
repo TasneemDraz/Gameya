@@ -16,7 +16,7 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.HasIndex(t => t.FamilyId);
         builder.HasIndex(t => t.UserId);
 
-        // Optimistic concurrency via PostgreSQL's xmin: two concurrent rotations of one token cannot both win.
-        builder.Property<uint>("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        // Optimistic concurrency via a rowversion column: two concurrent rotations of one token cannot both win.
+        builder.Property<byte[]>("row_version").IsRowVersion();
     }
 }

@@ -5,7 +5,7 @@
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Hangfire.Core" />
     <PackageReference Include="Hangfire.AspNetCore" />
-    <PackageReference Include="Hangfire.PostgreSql" />
+    <PackageReference Include="Hangfire.SqlServer" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />

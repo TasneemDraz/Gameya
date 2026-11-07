@@ -13,7 +13,7 @@ using Serilog.Parsing;
 
 namespace Gameya.Api.IntegrationTests.Ops;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class LogRedactionTests : IDisposable
 {
     private const string LoggingSmsSenderContext = "Gameya.Infrastructure.Sms.LoggingSmsSender";
@@ -21,7 +21,7 @@ public sealed class LogRedactionTests : IDisposable
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public LogRedactionTests(PostgresFixture db)
+    public LogRedactionTests(DatabaseFixture db)
     {
         _factory = new GameyaApiFactory(db);
         _client = _factory.CreateClient();

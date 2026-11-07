@@ -14,16 +14,16 @@ using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Gameya.Api.IntegrationTests.Auth;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class SessionTests : IDisposable
 {
     private const string CookiePrefix = "gameya_rt=";
 
-    private readonly PostgresFixture _db;
+    private readonly DatabaseFixture _db;
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public SessionTests(PostgresFixture db)
+    public SessionTests(DatabaseFixture db)
     {
         _db = db;
         _factory = new GameyaApiFactory(db);
@@ -191,9 +191,9 @@ public sealed class SessionTests : IDisposable
 
     /// <summary>
     /// Innermost behavior: after the handler has read and modified the token, a second writer touches the
-    /// row (changing its xmin) before the transaction behavior saves, which forces the optimistic conflict.
+    /// row (bumping its rowversion) before the transaction behavior saves, which forces the optimistic conflict.
     /// </summary>
-    private sealed class BumpTokenRowAfterHandler(PostgresFixture db)
+    private sealed class BumpTokenRowAfterHandler(DatabaseFixture db)
         : IPipelineBehavior<RefreshSessionCommand, SessionResult>
     {
         public async Task<SessionResult> Handle(

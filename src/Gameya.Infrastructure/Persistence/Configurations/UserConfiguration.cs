@@ -19,13 +19,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         // Roles is exposed read-only; the list lives in the backing field.
         builder.Ignore(u => u.Roles);
-        builder.Property<List<string>>("_roles").HasColumnName("roles").HasColumnType("text[]");
+        builder.PrimitiveCollection<List<string>>("_roles").HasColumnName("roles").HasColumnType("nvarchar(max)");
 
-        builder.Property(u => u.EmailSendTimes).HasColumnType("jsonb");
+        builder.PrimitiveCollection(u => u.EmailSendTimes).HasColumnType("nvarchar(max)");
 
-        // Optimistic concurrency via PostgreSQL's xmin: parallel email changes cannot all pass the send limit,
+        // Optimistic concurrency via a rowversion column: parallel email changes cannot all pass the send limit,
         // and a photo upload cannot land on a row that DeleteAccount anonymized in between.
-        builder.Property<uint>("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        builder.Property<byte[]>("row_version").IsRowVersion();
 
         builder.HasIndex(u => u.Phone).IsUnique().HasFilter("deleted_at IS NULL");
         builder.HasIndex(u => u.Email).IsUnique().HasFilter("email IS NOT NULL");

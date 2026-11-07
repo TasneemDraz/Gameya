@@ -5,8 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Gameya.Api.IntegrationTests.Auth;
 
-[Collection(PostgresCollection.Name)]
-public sealed class RefreshTokenConcurrencyTests(PostgresFixture db)
+[Collection(DatabaseCollection.Name)]
+public sealed class RefreshTokenConcurrencyTests(DatabaseFixture db)
 {
     [Fact]
     public async Task Rotating_the_same_token_from_two_contexts_throws_DbUpdateConcurrencyException()

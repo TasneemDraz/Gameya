@@ -4,7 +4,7 @@ using Gameya.Api.IntegrationTests.Infrastructure;
 
 namespace Gameya.Api.IntegrationTests.Files;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class SignedFileTests : IDisposable
 {
     private const string PhotoPrefix = "/api/files/profile-photos/";
@@ -12,7 +12,7 @@ public sealed class SignedFileTests : IDisposable
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public SignedFileTests(PostgresFixture db)
+    public SignedFileTests(DatabaseFixture db)
     {
         _factory = new GameyaApiFactory(db);
         _client = _factory.CreateClient();

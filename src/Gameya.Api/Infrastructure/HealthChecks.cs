@@ -7,13 +7,13 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Gameya.Api.Infrastructure;
 
-/// <summary><c>GET /health</c>: postgres, files and hangfire. Responses carry statuses only, never exception text.</summary>
+/// <summary><c>GET /health</c>: database, files and hangfire. Responses carry statuses only, never exception text.</summary>
 public static class HealthChecks
 {
     public static IServiceCollection AddGameyaHealthChecks(this IServiceCollection services)
     {
         services.AddHealthChecks()
-            .AddCheck<PostgresHealthCheck>("postgres")
+            .AddCheck<DatabaseHealthCheck>("database")
             .AddCheck<FilesHealthCheck>("files")
             .AddCheck<HangfireHealthCheck>("hangfire");
         return services;
@@ -39,7 +39,7 @@ public static class HealthChecks
     }
 }
 
-internal sealed class PostgresHealthCheck(AppDbContext db) : IHealthCheck
+internal sealed class DatabaseHealthCheck(AppDbContext db) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default) =>
         await db.Database.CanConnectAsync(ct)

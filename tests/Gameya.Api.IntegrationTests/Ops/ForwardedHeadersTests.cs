@@ -8,8 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Gameya.Api.IntegrationTests.Ops;
 
-[Collection(PostgresCollection.Name)]
-public sealed class ForwardedHeadersTests(PostgresFixture db)
+[Collection(DatabaseCollection.Name)]
+public sealed class ForwardedHeadersTests(DatabaseFixture db)
 {
     private const string TrustedPeer = "10.20.0.5";
     private const string UntrustedPeer = "203.0.113.9";

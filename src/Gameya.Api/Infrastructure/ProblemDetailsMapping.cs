@@ -2,8 +2,8 @@ using Gameya.Application.Common;
 using Gameya.Domain.Common;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Gameya.Api.Infrastructure;
 
@@ -13,8 +13,6 @@ namespace Gameya.Api.Infrastructure;
 /// </summary>
 public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger) : IExceptionHandler
 {
-    private const string UniqueViolation = "23505";
-
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken ct)
     {
         switch (exception)
@@ -50,11 +48,19 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
 
     /// <summary>True for the unique-index violation raised when two requests create the same phone's challenge.</summary>
     public static bool IsOtpChallengePhoneConflict(Exception exception) =>
-        exception is DbUpdateException { InnerException: PostgresException { SqlState: UniqueViolation, TableName: "otp_challenges" } };
+        IsUniqueViolationOn(exception, "ix_otp_challenges_phone");
 
     /// <summary>True for the unique-index violation raised when two accounts verify the same email concurrently.</summary>
     public static bool IsUserEmailConflict(Exception exception) =>
-        exception is DbUpdateException { InnerException: PostgresException { SqlState: UniqueViolation, ConstraintName: "ix_users_email" } };
+        IsUniqueViolationOn(exception, "ix_users_email");
+
+    /// <summary>
+    /// SQL Server reports a duplicate key as error 2601 (unique index) or 2627 (unique constraint) and names the
+    /// index only in the message text.
+    /// </summary>
+    private static bool IsUniqueViolationOn(Exception exception, string indexName) =>
+        exception is DbUpdateException { InnerException: SqlException { Number: 2601 or 2627 } sql }
+        && sql.Message.Contains(indexName, StringComparison.Ordinal);
 
     public static int StatusFor(string code) => code switch
     {

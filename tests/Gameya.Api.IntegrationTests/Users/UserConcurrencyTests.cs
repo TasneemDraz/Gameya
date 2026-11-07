@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Gameya.Api.IntegrationTests.Users;
 
-[Collection(PostgresCollection.Name)]
-public sealed class UserConcurrencyTests(PostgresFixture db)
+[Collection(DatabaseCollection.Name)]
+public sealed class UserConcurrencyTests(DatabaseFixture db)
 {
     [Fact]
     public async Task Updating_the_same_user_from_two_contexts_throws_DbUpdateConcurrencyException()

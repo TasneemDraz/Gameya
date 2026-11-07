@@ -10,14 +10,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Gameya.Api.IntegrationTests.Users;
 
-[Collection(PostgresCollection.Name)]
+[Collection(DatabaseCollection.Name)]
 public sealed class ProfileTests : IDisposable
 {
-    private readonly PostgresFixture _db;
+    private readonly DatabaseFixture _db;
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public ProfileTests(PostgresFixture db)
+    public ProfileTests(DatabaseFixture db)
     {
         _db = db;
         _factory = new GameyaApiFactory(db);

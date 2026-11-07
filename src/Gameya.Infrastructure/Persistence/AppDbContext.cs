@@ -18,7 +18,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     /// <summary>Single place that defines provider, naming convention and interceptors.</summary>
     public static DbContextOptionsBuilder Configure(DbContextOptionsBuilder builder, string connectionString) =>
         builder
-            .UseNpgsql(connectionString)
+            .UseSqlServer(connectionString)
             .UseSnakeCaseNamingConvention()
             .AddInterceptors(ActivityLogImmutabilityInterceptor.Instance);
 
