@@ -39,6 +39,35 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
+      - name: Check required secrets (before anything touches the database)
+        env:
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          SECURITY_HASH_KEY: ${{ secrets.SECURITY_HASH_KEY }}
+          STORAGE_URL_SIGNING_KEY: ${{ secrets.STORAGE_URL_SIGNING_KEY }}
+          WEBDEPLOY_SERVER: ${{ secrets.WEBDEPLOY_SERVER }}
+          WEBDEPLOY_SITE: ${{ secrets.WEBDEPLOY_SITE }}
+          WEBDEPLOY_USERNAME: ${{ secrets.WEBDEPLOY_USERNAME }}
+          WEBDEPLOY_PASSWORD: ${{ secrets.WEBDEPLOY_PASSWORD }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          B2_S3_ENDPOINT: ${{ secrets.B2_S3_ENDPOINT }}
+          B2_FILES_BUCKET: ${{ secrets.B2_FILES_BUCKET }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
+          B2_REGION: ${{ secrets.B2_REGION }}
+        run: |
+          $names = 'DB_CONNECTION_STRING', 'JWT_SIGNING_KEY', 'SECURITY_HASH_KEY', 'STORAGE_URL_SIGNING_KEY',
+            'WEBDEPLOY_SERVER', 'WEBDEPLOY_SITE', 'WEBDEPLOY_USERNAME', 'WEBDEPLOY_PASSWORD', 'SITE_URL',
+            'B2_S3_ENDPOINT', 'B2_FILES_BUCKET', 'B2_KEY_ID', 'B2_APP_KEY', 'B2_REGION'
+          $bad = $false
+          foreach ($name in $names) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              Write-Host "::error::required secret $name is empty or not set"
+              $bad = $true
+            }
+          }
+          if ($bad) { exit 1 }
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
