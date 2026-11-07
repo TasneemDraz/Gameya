@@ -1,6 +1,6 @@
 namespace Gameya.Api.Infrastructure;
 
-/// <summary>The security headers Caddy used to set; the API now sets them itself because the host has no reverse proxy.</summary>
+/// <summary>The security headers the API sets itself, because the host has no reverse proxy we control.</summary>
 public static class SecurityHeaders
 {
     public const string ContentSecurityPolicy =

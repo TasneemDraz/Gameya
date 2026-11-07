@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.StaticFiles;
 
 namespace Gameya.Api.Infrastructure;
 
-/// <summary>Serves the Angular production build from wwwroot on the same origin as the API, with Caddy's cache rules.</summary>
+/// <summary>Serves the Angular production build from wwwroot on the same origin as the API, with long-lived caching for hashed assets and no caching for index.html.</summary>
 public static partial class SpaHosting
 {
     private const string Immutable = "public, max-age=31536000, immutable";

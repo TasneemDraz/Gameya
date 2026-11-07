@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 namespace Gameya.Api.Infrastructure;
 
 /// <summary>
-/// Rate limiting keys on the client IP, so behind Caddy the API must read it from X-Forwarded-For. Only the
-/// networks listed in <c>ForwardedHeaders:KnownNetworks</c> (CIDR, the compose network in production) may set
+/// Rate limiting keys on the client IP, so behind a reverse proxy the API must read it from X-Forwarded-For. Only the
+/// networks listed in <c>ForwardedHeaders:KnownNetworks</c> (CIDR, the host proxy network if there is one) may set
 /// those headers; from anywhere else they are ignored, so a client cannot pick its own rate-limit bucket.
 /// With nothing configured no sender is trusted, which is the safe default for Development and tests.
 /// </summary>
