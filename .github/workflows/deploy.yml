@@ -216,10 +216,21 @@ jobs:
             Start-Sleep -Seconds 10
           }
 
+      # Expressions have no replace(); a ref such as refs/tags/v1.2 or a branch name is made safe for an artifact name here.
+      - name: Name the artifact
+        id: artifact
+        env:
+          REF: ${{ inputs.ref || github.sha }}
+        run: |
+          $safe = $env:REF -replace '[/\\:<>|*?"]', '-'
+          "name=site-$safe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
       - name: Upload the site (without secrets.json)
         uses: actions/upload-artifact@v4
         with:
-          name: site-${{ replace(inputs.ref || github.sha, '/', '-') }}
+          name: ${{ steps.artifact.outputs.name }}
+          # A repeated rollback to the same ref reuses the name.
+          overwrite: true
           path: |
             site/
             !site/secrets.json
