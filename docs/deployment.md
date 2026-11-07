@@ -100,6 +100,7 @@ Migrations run before the new files go live, and they are not rolled back. Every
 
 - `secrets.json` sits in the site's content root (not in `wwwroot`, and the app never serves it). The deploy writes it. It has lower precedence than environment variables and the command line, so either of those overrides a value in the file.
 - Logs are written to `logs/` on the site as rolling JSON files, kept for 7 days. IIS discards console output, so read the files there. Deploys skip that folder, so logs survive a deploy.
+- If the app fails to start (for example a missing or invalid setting), Serilog does not exist yet. The exception is appended to `logs/startup-error.log` instead, with a UTC timestamp, the exception type and the redacted exception text (never config values). When the deploy's health poll fails, look at that file first. If it is missing or empty, the process died before managed code ran: set `stdoutLogEnabled="true"` in `web.config` on the server (and create a `logs` folder if the `stdoutLogFile` path needs one), reproduce the failure, read the stdout log, then set it back to `false` so the log does not grow.
 
 ### Stale files and the periodic clean deploy
 
@@ -170,4 +171,7 @@ Also confirm once, on staging:
 - msdeploy authenticates (Basic, port 8172), `logs/` survives a second deploy, and `secrets.json` is on the server but not in the workflow artifact.
 - `GET /secrets.json` and `GET /appsettings.json` return 404.
 - A rollback run (Run workflow with a previous tag or sha) works, and a `v*` tag push stops at the production approval gate.
+- Static compression works: request a hashed `.js` file with `Accept-Encoding: gzip` (for example `curl -sI -H "Accept-Encoding: gzip" https://<staging-site>/main-XXXX.js`) and the response has `Content-Encoding: gzip`. Only static files are compressed on purpose: API responses carry tokens, and compressing them invites BREACH.
+- HTTP 500.19 right after the first deploy probably means the host locks the `system.webServer/webSocket` section. Remove `<webSocket enabled="true" />` from `web.config` and deploy again.
+- `Africa/Cairo` resolves on the host (ICU present). Any request that uses `CairoCalendar` throws if it does not. This only matters once features use it.
 - `ASPNETCORE_ENVIRONMENT` is picked up from `web.config` (the app behaves as Staging).
