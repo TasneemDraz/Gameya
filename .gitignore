@@ -6,6 +6,10 @@
 # local file storage (dev)
 .data/
 
+# server secrets and rolling file logs
+secrets.json
+src/Gameya.Api/logs/
+
 # dotenv files
 .env
 

@@ -18,6 +18,7 @@ namespace Gameya.Api.Infrastructure;
 public static class Observability
 {
     public const string CorrelationHeader = "X-Correlation-Id";
+    public const string LogFilePathKey = "Observability:LogFilePath";
     public const string OtlpEndpointKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
     internal const string CorrelationItemKey = "Gameya.CorrelationId";
 
@@ -26,7 +27,7 @@ public static class Observability
         context.Items[CorrelationItemKey] as string ?? context.TraceIdentifier;
 
     /// <summary>
-    /// Serilog writes compact JSON to stdout (Docker's json-file driver rotates it) through the redacting enricher.
+    /// Serilog writes compact JSON to stdout and, when <c>Observability:LogFilePath</c> is set, to a rolling file through the redacting enricher.
     /// DI-registered <see cref="ILogEventSink"/>s are added too, which is how tests capture events.
     /// </summary>
     public static WebApplicationBuilder AddObservability(this WebApplicationBuilder builder)
@@ -38,16 +39,34 @@ public static class Observability
             var outputs = new LoggerConfiguration()
                 .MinimumLevel.Verbose()
                 .WriteTo.Console(new CompactJsonFormatter())
-                .ReadFrom.Services(services)
-                .CreateLogger();
+                .ReadFrom.Services(services);
+            var logFilePath = builder.Configuration[LogFilePathKey];
+            if (!string.IsNullOrWhiteSpace(logFilePath))
+            {
+                // IIS discards stdout, so production also writes compact JSON to a rolling file.
+                // A relative path is resolved against the content root, not the working directory.
+                outputs.WriteTo.File(
+                    new CompactJsonFormatter(),
+                    Path.GetFullPath(logFilePath, builder.Environment.ContentRootPath),
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 7,
+                    fileSizeLimitBytes: 10_000_000,
+                    rollOnFileSizeLimit: true);
+            }
+
+            var outputLogger = outputs.CreateLogger();
+            // UseSerilog with preserveStaticLogger does not own the sinks; the container closes them on shutdown.
+            services.GetRequiredService<OutputLoggerOwner>().Logger = outputLogger;
             logger
                 .MinimumLevel.Information()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
                 .Enrich.FromLogContext()
                 .Enrich.With<RedactingEnricher>()
-                .WriteTo.Sink(new ExceptionRedactingSink(outputs));
+                .WriteTo.Sink(new ExceptionRedactingSink(outputLogger));
         }, preserveStaticLogger: true);
+
+        builder.Services.AddSingleton<OutputLoggerOwner>();
 
         // Traces and metrics are always collected in-process; nothing leaves the process unless an OTLP endpoint is set.
         var telemetry = builder.Services.AddOpenTelemetry()
@@ -124,6 +143,14 @@ public static class Observability
     {
         public bool Authorize(DashboardContext context) => true;
     }
+}
+
+/// <summary>Disposed with the service provider, which flushes and closes the log file.</summary>
+internal sealed class OutputLoggerOwner : IDisposable
+{
+    public Serilog.Core.Logger? Logger { get; set; }
+
+    public void Dispose() => Logger?.Dispose();
 }
 
 /// <summary>

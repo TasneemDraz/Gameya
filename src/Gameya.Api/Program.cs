@@ -12,6 +12,13 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Secrets come from a file in the content root (never wwwroot), resolved against the host's content root
+// rather than the working directory, which IIS sets differently.
+builder.Configuration.AddJsonFile(builder.Environment.ContentRootFileProvider, "secrets.json", optional: true, reloadOnChange: false);
+
+// Kestrel adds its Server header after OnStarting callbacks run, so it can only be switched off here.
+builder.WebHost.ConfigureKestrel(o => o.AddServerHeader = false);
+
 builder.Services.AddGameyaForwardedHeaders(builder.Configuration);
 builder.AddObservability();
 builder.Services.AddBackgroundJobs(builder.Configuration);

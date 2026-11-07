@@ -11,7 +11,7 @@ using Serilog.Core;
 namespace Gameya.Api.IntegrationTests;
 
 /// <summary>Hosts the API in the E2E environment against the Testcontainers SQL Server database, using a single login.</summary>
-public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? mail = null, string? storageRoot = null, IReadOnlyDictionary<string, string?>? settings = null, string? webRoot = null) : WebApplicationFactory<Program>
+public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? mail = null, string? storageRoot = null, IReadOnlyDictionary<string, string?>? settings = null, string? webRoot = null, string? contentRoot = null) : WebApplicationFactory<Program>
 {
     public DatabaseFixture Database => database;
 
@@ -43,6 +43,18 @@ public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? m
         builder.UseSetting("Jwt:Issuer", "gameya-tests");
         builder.UseSetting("Jwt:Audience", "gameya-tests");
         builder.UseSetting("Jwt:SigningKey", "test-signing-key-0123456789abcdef0123456789abcdef");
+
+        if (contentRoot is not null)
+        {
+            // Under WebApplicationFactory the content root is src/Gameya.Api, which tests must never write into.
+            // Tests that need their own content root get a copy of the appsettings files there.
+            foreach (var file in Directory.GetFiles(AppContext.BaseDirectory, "appsettings*.json"))
+            {
+                File.Copy(file, Path.Combine(contentRoot, Path.GetFileName(file)), overwrite: true);
+            }
+
+            builder.UseContentRoot(contentRoot);
+        }
 
         if (webRoot is not null)
         {

@@ -27,7 +27,6 @@ public static class SecurityHeaders
                 headers["X-Content-Type-Options"] = "nosniff";
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
                 headers["Content-Security-Policy"] = ContentSecurityPolicy;
-                headers.Remove("Server");
                 return Task.CompletedTask;
             });
             return next(context);

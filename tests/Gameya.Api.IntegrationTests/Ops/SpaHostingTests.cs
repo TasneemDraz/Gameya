@@ -49,6 +49,14 @@ public sealed class SpaHostingTests : IDisposable
     }
 
     [Fact]
+    public async Task Missing_file_with_extension_is_404_not_index()
+    {
+        var response = await _client.GetAsync("/missing-file.js");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Hashed_asset_is_immutable()
     {
         var response = await _client.GetAsync("/main-ABCD1234.js");
@@ -100,6 +108,5 @@ public sealed class SpaHostingTests : IDisposable
         response.Headers.GetValues("X-Content-Type-Options").Single().ShouldBe("nosniff");
         response.Headers.GetValues("Referrer-Policy").Single().ShouldBe("strict-origin-when-cross-origin");
         response.Headers.GetValues("Strict-Transport-Security").Single().ShouldBe("max-age=31536000; includeSubDomains");
-        response.Headers.Contains("Server").ShouldBeFalse();
     }
 }

@@ -34,7 +34,7 @@ public static partial class SpaHosting
         return app.UseRouting();
     }
 
-    /// <summary>Unmatched requests get index.html (when wwwroot has one), except under /api, /hubs and /health, which stay real 404s.</summary>
+    /// <summary>Unmatched requests get index.html (when wwwroot has one), except under /api, /hubs and /health and paths whose last segment has a file extension, which stay real 404s.</summary>
     public static IEndpointRouteBuilder MapGameyaSpaFallback(this WebApplication app)
     {
         // Without a build there is no shell to serve; a catch-all endpoint would only answer 404 for everything.
@@ -43,7 +43,7 @@ public static partial class SpaHosting
             return app;
         }
 
-        app.MapFallbackToFile("{*path:regex(^(?!api/|api$|hubs/|health$).*$)}", "index.html", Options());
+        app.MapFallbackToFile("{*path:regex(^(?!api/|api$|hubs/|health$)(?!.*[.][^/]*$).*$)}", "index.html", Options());
         return app;
     }
 }
