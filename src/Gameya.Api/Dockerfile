@@ -1,6 +1,6 @@
 # Build context is the repository root:  docker build -f src/Gameya.Api/Dockerfile .
 # The build stage always runs on the build machine's architecture and cross-publishes with `-a $TARGETARCH`,
-# so `docker buildx build --platform linux/arm64` works on an x64 runner without QEMU.
+# so the image can be cross-built for another architecture on any runner without QEMU.
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
 WORKDIR /src

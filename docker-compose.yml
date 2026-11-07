@@ -1,5 +1,5 @@
 # Local stack: docker compose up --build -d   (API on http://localhost:8080, Mailpit UI on http://localhost:8025)
-# Dev passwords below are the same ones docker/postgres/init.sql sets; nothing here is for production.
+# The sa password below is a dev-only value; nothing here is for production.
 x-logging: &json-file-logging
   driver: json-file
   options:
@@ -7,21 +7,21 @@ x-logging: &json-file-logging
     max-file: "5"
 
 services:
-  postgres:
-    image: postgres:17
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      POSTGRES_DB: gameya
-      POSTGRES_PASSWORD: postgres-superuser-dev
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Gameya-dev-Passw0rd
     ports:
-      - "5432:5432"
+      - "1433:1433"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mssqldata:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d gameya"]
+      test: ["CMD-SHELL", '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"']
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
+      start_period: 20s
     logging: *json-file-logging
 
   mailpit:
@@ -36,17 +36,17 @@ services:
     build:
       context: .
       dockerfile: src/Gameya.Api/Dockerfile
-    # Applies EF migrations as gameya_migrator, then keeps serving. The flag is refused outside Development.
+    # Applies EF migrations (EF creates the database), then keeps serving. The flag is refused outside Development.
     command: ["--migrate"]
     depends_on:
-      postgres:
+      mssql:
         condition: service_healthy
       mailpit:
         condition: service_started
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__App: Host=postgres;Port=5432;Database=gameya;Username=gameya_app;Password=gameya_app_dev
-      ConnectionStrings__Migrator: Host=postgres;Port=5432;Database=gameya;Username=gameya_migrator;Password=gameya_migrator_dev
+      ConnectionStrings__App: Server=mssql;Database=gameya;User Id=sa;Password=Gameya-dev-Passw0rd;TrustServerCertificate=True
+      ConnectionStrings__Migrator: Server=mssql;Database=gameya;User Id=sa;Password=Gameya-dev-Passw0rd;TrustServerCertificate=True
       Email__Smtp__Host: mailpit
       Email__Smtp__Port: "1025"
       Sms__Provider: Logging
@@ -58,5 +58,5 @@ services:
     logging: *json-file-logging
 
 volumes:
-  pgdata:
+  mssqldata:
   files:

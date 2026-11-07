@@ -10,7 +10,7 @@ using Serilog.Core;
 
 namespace Gameya.Api.IntegrationTests;
 
-/// <summary>Hosts the API in the E2E environment against the Testcontainers database, as the gameya_app role.</summary>
+/// <summary>Hosts the API in the E2E environment against the Testcontainers SQL Server database, using a single login.</summary>
 public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? mail = null, string? storageRoot = null) : WebApplicationFactory<Program>
 {
     public DatabaseFixture Database => database;

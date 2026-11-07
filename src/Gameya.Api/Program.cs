@@ -49,6 +49,25 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+// `--migrate` is for the local compose stack only: apply EF migrations (this creates the database), then keep running.
+// It must run before anything touches Hangfire storage, which needs the database to exist.
+if (args.Contains("--migrate"))
+{
+    if (!app.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException("--migrate is only allowed in the Development environment.");
+    }
+
+    var migrator = app.Configuration.GetConnectionString("Migrator")
+        ?? throw new InvalidOperationException("ConnectionStrings:Migrator is not configured.");
+    var dbOptions = new DbContextOptionsBuilder<AppDbContext>();
+    AppDbContext.Configure(dbOptions, migrator);
+    await using (var db = new AppDbContext(dbOptions.Options))
+    {
+        await db.Database.MigrateAsync();
+    }
+}
+
 app.UseForwardedHeaders();
 app.UseObservability();
 app.UseExceptionHandler();
@@ -68,24 +87,6 @@ if (app.Environment.IsDevelopmentOrE2E())
 if (app.Environment.IsDevelopment())
 {
     app.MapDevHangfireDashboard();
-}
-
-// `--migrate` is for the local compose stack only: apply EF migrations as the migrator role, then keep running.
-if (args.Contains("--migrate"))
-{
-    if (!app.Environment.IsDevelopment())
-    {
-        throw new InvalidOperationException("--migrate is only allowed in the Development environment.");
-    }
-
-    var migrator = app.Configuration.GetConnectionString("Migrator")
-        ?? throw new InvalidOperationException("ConnectionStrings:Migrator is not configured.");
-    var dbOptions = new DbContextOptionsBuilder<AppDbContext>();
-    AppDbContext.Configure(dbOptions, migrator);
-    await using (var db = new AppDbContext(dbOptions.Options))
-    {
-        await db.Database.MigrateAsync();
-    }
 }
 
 app.Run();
