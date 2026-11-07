@@ -1,17 +1,24 @@
 name: Deploy
 
 # push to main -> staging; push of a v* tag -> production (GitHub Environment with a required reviewer).
-# Secrets are per GitHub Environment; see docs/deployment.md.
+# workflow_dispatch redeploys any tag or sha (rollback): a v* ref goes to production, anything else to staging.
+# Target: MonsterASP.NET over WebDeploy. Secrets are per GitHub Environment; see docs/deployment.md.
 on:
   push:
     branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or commit sha to deploy (rollback). A v* tag deploys to production, anything else to staging."
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-${{ github.ref_type == 'tag' && 'production' || 'staging' }}
+  group: deploy-${{ (github.ref_type == 'tag' || startsWith(inputs.ref, 'v')) && 'production' || 'staging' }}
   cancel-in-progress: false
 
 env:
@@ -21,36 +28,20 @@ env:
 jobs:
   deploy:
     name: deploy
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 45
-    environment: ${{ github.ref_type == 'tag' && 'production' || 'staging' }}
+    environment: ${{ (github.ref_type == 'tag' || startsWith(inputs.ref, 'v')) && 'production' || 'staging' }}
+    defaults:
+      run:
+        shell: pwsh
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build linux/arm64 API image
-        run: |
-          docker buildx build --platform linux/arm64 \
-            -f src/Gameya.Api/Dockerfile \
-            -t "gameya-api:${GITHUB_SHA}" \
-            -o type=docker,dest=image.tar .
-          gzip -f image.tar
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-
-      - name: Build the self-contained linux-arm64 migrations bundle
-        # The design-time factory requires a connection string even to build; this one is never used to connect.
-        # The real value is supplied by deploy-release.sh when the bundle runs.
-        env:
-          ConnectionStrings__Migrator: Host=build-placeholder;Database=gameya
-        run: |
-          dotnet tool restore
-          dotnet ef migrations bundle \
-            -p src/Gameya.Infrastructure -s src/Gameya.Infrastructure \
-            -r linux-arm64 --self-contained -o efbundle
 
       - uses: actions/setup-node@v4
         with:
@@ -58,96 +49,133 @@ jobs:
           cache: npm
           cache-dependency-path: src/gameya-web/package-lock.json
 
-      - name: Build the web app
+      - name: Domain tests (Africa/Cairo must resolve on Windows)
+        run: dotnet test tests/Gameya.Domain.Tests
+
+      - name: Build the self-contained win-x64 migrations bundle
+        # The design-time factory requires a connection string even to build; this one is never used to connect.
+        env:
+          ConnectionStrings__Migrator: Server=build-placeholder;Database=gameya
+        run: |
+          dotnet tool restore
+          if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed" }
+          dotnet ef migrations bundle -p src/Gameya.Infrastructure -s src/Gameya.Infrastructure -r win-x64 --self-contained -o efbundle.exe --force
+          if ($LASTEXITCODE -ne 0) { throw "efbundle build failed" }
+
+      - name: Run the migrations
+        env:
+          ConnectionStrings__Migrator: ${{ secrets.DB_CONNECTION_STRING }}
+        run: |
+          ./efbundle.exe
+          if ($LASTEXITCODE -ne 0) { throw "migrations failed with exit code $LASTEXITCODE" }
+
+      - name: Install web dependencies
         working-directory: src/gameya-web
-        run: |
-          npm ci
-          npx ng build --configuration production
+        run: npm ci
 
-      - name: Set up SSH
+      - name: Publish the site
+        run: ./tools/publish-site.ps1 -OutDir site
+
+      - name: Write secrets.json and set the environment name
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          # The host key is pinned in DEPLOY_KNOWN_HOSTS; an unknown or changed key fails the connection.
-          {
-            echo "Host target"
-            echo "  HostName ${DEPLOY_HOST}"
-            echo "  User deploy"
-            echo "  IdentityFile ~/.ssh/id_deploy"
-            echo "  IdentitiesOnly yes"
-            echo "  BatchMode yes"
-            echo "  StrictHostKeyChecking yes"
-          } > ~/.ssh/config
-          chmod 600 ~/.ssh/config
-
-      - name: Upload the release
-        run: |
-          set -euo pipefail
-          ssh target "mkdir -p /opt/gameya/caddy /opt/gameya/releases/${GITHUB_SHA}"
-          rsync -az --delete src/gameya-web/dist/gameya-web/browser/ "target:/opt/gameya/releases/${GITHUB_SHA}/web/"
-          rsync -az efbundle infra/sql/roles.sql "target:/opt/gameya/releases/${GITHUB_SHA}/"
-          rsync -az infra/compose.prod.yml infra/deploy-release.sh infra/backup.sh infra/restore.sh target:/opt/gameya/
-          rsync -az infra/Caddyfile target:/opt/gameya/caddy/
-          ssh target "chmod +x /opt/gameya/*.sh /opt/gameya/releases/${GITHUB_SHA}/efbundle"
-
-      - name: Load the API image
-        run: gunzip -c image.tar.gz | ssh target docker load
-
-      - name: Write .env (secrets go over stdin, never on a command line)
-        env:
-          ASPNETCORE_ENVIRONMENT: ${{ github.ref_type == 'tag' && 'Production' || 'Staging' }}
-          SITE_ADDRESS: ${{ secrets.SITE_ADDRESS }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          DB_MIGRATOR_PASSWORD: ${{ secrets.DB_MIGRATOR_PASSWORD }}
-          DB_APP_PASSWORD: ${{ secrets.DB_APP_PASSWORD }}
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
-          SECURITY_HASH_KEY: ${{ secrets.SECURITY_HASH_KEY }}
-          STORAGE_URL_SIGNING_KEY: ${{ secrets.STORAGE_URL_SIGNING_KEY }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          SMS_PROVIDER: ${{ secrets.SMS_PROVIDER }}
-          SMSGATE_BASE_URL: ${{ secrets.SMSGATE_BASE_URL }}
-          SMSGATE_USERNAME: ${{ secrets.SMSGATE_USERNAME }}
-          SMSGATE_PASSWORD: ${{ secrets.SMSGATE_PASSWORD }}
-          SMS_API_KEY: ${{ secrets.SMS_API_KEY }}
-          MEDIATR_LICENSE_KEY: ${{ secrets.MEDIATR_LICENSE_KEY }}
-          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
-          B2_BUCKET: ${{ secrets.B2_BUCKET }}
-          BACKUP_PING_URL: ${{ secrets.BACKUP_PING_URL }}
+          DEPLOY_ASPNETCORE_ENVIRONMENT: ${{ (github.ref_type == 'tag' || startsWith(inputs.ref, 'v')) && 'Production' || 'Staging' }}
+          ConnectionStrings__App: ${{ secrets.DB_CONNECTION_STRING }}
+          ConnectionStrings__Migrator: ${{ secrets.DB_CONNECTION_STRING }}
+          Jwt__Issuer: gameya
+          Jwt__Audience: gameya
+          Jwt__SigningKey: ${{ secrets.JWT_SIGNING_KEY }}
+          Security__HashKey: ${{ secrets.SECURITY_HASH_KEY }}
+          Storage__UrlSigningKey: ${{ secrets.STORAGE_URL_SIGNING_KEY }}
+          Storage__Provider: S3
+          Storage__S3__ServiceUrl: ${{ secrets.B2_S3_ENDPOINT }}
+          Storage__S3__Bucket: ${{ secrets.B2_FILES_BUCKET }}
+          Storage__S3__AccessKeyId: ${{ secrets.B2_KEY_ID }}
+          Storage__S3__SecretAccessKey: ${{ secrets.B2_APP_KEY }}
+          Storage__S3__Region: ${{ secrets.B2_REGION }}
+          Email__Smtp__Host: ${{ secrets.SMTP_HOST || 'smtp-relay.brevo.com' }}
+          Email__Smtp__Port: ${{ secrets.SMTP_PORT || '587' }}
+          Email__Smtp__Username: ${{ secrets.SMTP_USERNAME }}
+          Email__Smtp__Password: ${{ secrets.SMTP_PASSWORD }}
+          Email__Smtp__UseStartTls: "true"
+          Email__From: ${{ secrets.EMAIL_FROM }}
+          Sms__Provider: ${{ secrets.SMS_PROVIDER || 'SmsGate' }}
+          Sms__SmsGate__BaseUrl: ${{ secrets.SMSGATE_BASE_URL || 'https://api.sms-gate.app/3rdparty/v1' }}
+          Sms__SmsGate__Username: ${{ secrets.SMSGATE_USERNAME }}
+          Sms__SmsGate__Password: ${{ secrets.SMSGATE_PASSWORD }}
+          MediatR__LicenseKey: ${{ secrets.MEDIATR_LICENSE_KEY }}
+          App__WebBaseUrl: ${{ secrets.SITE_URL }}
           OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          ForwardedHeaders__KnownNetworks__0: ${{ secrets.FORWARDED_KNOWN_NETWORK }}
+          Observability__LogFilePath: logs/gameya-.json
         run: |
-          set -euo pipefail
-          # Values are single-quoted (compose reads them literally, so "$" is safe); a quote or newline cannot be.
-          # Validation runs in this shell (not a command substitution), so a bad value fails the step before
-          # anything is sent over SSH.
-          content=""
-          bad=0
-          for name in ASPNETCORE_ENVIRONMENT SITE_ADDRESS POSTGRES_PASSWORD DB_MIGRATOR_PASSWORD DB_APP_PASSWORD \
-            JWT_SIGNING_KEY SECURITY_HASH_KEY STORAGE_URL_SIGNING_KEY SMTP_USERNAME SMTP_PASSWORD EMAIL_FROM \
-            SMS_PROVIDER SMSGATE_BASE_URL SMSGATE_USERNAME SMSGATE_PASSWORD SMS_API_KEY MEDIATR_LICENSE_KEY \
-            B2_KEY_ID B2_APP_KEY B2_BUCKET BACKUP_PING_URL OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_HEADERS; do
-            value="${!name-}"
-            if [[ "$value" == *"'"* || "$value" == *$'\n'* ]]; then
-              echo "::error::secret $name must not contain a single quote or a newline"
-              bad=1
-              continue
-            fi
-            content+="$name='$value'"$'\n'
-          done
-          if ((bad != 0)); then
-            exit 1
-          fi
-          printf '%s\n' "$content" | ssh target 'umask 077; cat > /opt/gameya/.env.new && mv /opt/gameya/.env.new /opt/gameya/.env'
+          node tools/write-secrets.mjs site/secrets.json
+          if ($LASTEXITCODE -ne 0) { throw "write-secrets failed" }
 
-      - name: Deploy
-        run: ssh target "/opt/gameya/deploy-release.sh ${GITHUB_SHA}"
+          # The environment name must be known before configuration loads, so it lives in web.config, not secrets.json.
+          $path = (Resolve-Path site/web.config).Path
+          $xml = [xml](Get-Content -Raw -LiteralPath $path)
+          $aspNetCore = $xml.SelectSingleNode('//aspNetCore')
+          if ($null -eq $aspNetCore) { throw "web.config has no <aspNetCore> element" }
+          $envVars = $aspNetCore.SelectSingleNode('environmentVariables')
+          if ($null -eq $envVars) {
+            $envVars = $xml.CreateElement('environmentVariables')
+            [void]$aspNetCore.AppendChild($envVars)
+          }
+          $var = $xml.CreateElement('environmentVariable')
+          $var.SetAttribute('name', 'ASPNETCORE_ENVIRONMENT')
+          $var.SetAttribute('value', $env:DEPLOY_ASPNETCORE_ENVIRONMENT)
+          [void]$envVars.AppendChild($var)
+          $xml.Save($path)
+
+      - name: Install Web Deploy
+        run: |
+          choco install webdeploy -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco install webdeploy failed" }
+
+      - name: Sync the site with Web Deploy
+        env:
+          WEBDEPLOY_SERVER: ${{ secrets.WEBDEPLOY_SERVER }}
+          WEBDEPLOY_SITE: ${{ secrets.WEBDEPLOY_SITE }}
+          WEBDEPLOY_USERNAME: ${{ secrets.WEBDEPLOY_USERNAME }}
+          WEBDEPLOY_PASSWORD: ${{ secrets.WEBDEPLOY_PASSWORD }}
+        run: |
+          $msdeploy = Join-Path ${env:ProgramFiles} 'IIS\Microsoft Web Deploy V3\msdeploy.exe'
+          if (-not (Test-Path $msdeploy)) { throw "msdeploy.exe not found at $msdeploy" }
+          $source = (Resolve-Path site).Path
+          $site = $env:WEBDEPLOY_SITE
+          # The password is read from the environment here and is never written to the log.
+          $dest = "contentPath=$site,computerName=https://$($env:WEBDEPLOY_SERVER):8172/msdeploy.axd?site=$site,userName=$($env:WEBDEPLOY_USERNAME),password=$($env:WEBDEPLOY_PASSWORD),authType=Basic"
+          & $msdeploy -verb:sync "-source:contentPath=$source" "-dest:$dest" `
+            -enableRule:AppOffline -enableRule:DoNotDeleteRule '-skip:Directory=\\logs$' -allowUntrusted
+          if ($LASTEXITCODE -ne 0) { throw "msdeploy failed with exit code $LASTEXITCODE" }
+
+      - name: Wait for /health to report Healthy
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          $url = $env:SITE_URL.TrimEnd('/') + '/health'
+          $deadline = (Get-Date).AddMinutes(5)
+          while ($true) {
+            $status = 'unreachable'
+            try {
+              $response = Invoke-WebRequest -Uri $url -SkipHttpErrorCheck -TimeoutSec 20
+              $status = ($response.Content | ConvertFrom-Json).status
+            }
+            catch {
+              $status = 'unreachable'
+            }
+            Write-Host "$(Get-Date -Format o) $url -> $status"
+            if ($status -ceq 'Healthy') { break }
+            if ((Get-Date) -ge $deadline) { throw "$url did not report Healthy within 5 minutes (last: $status)" }
+            Start-Sleep -Seconds 10
+          }
+
+      - name: Upload the site (without secrets.json)
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-${{ github.sha }}
+          path: |
+            site/
+            !site/secrets.json
+          retention-days: 30
