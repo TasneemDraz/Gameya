@@ -17,9 +17,10 @@ COPY src/ src/
 RUN dotnet publish src/Gameya.Api/Gameya.Api.csproj -c Release -a $TARGETARCH --no-restore -o /app \
     && mkdir -p /data/files
 
-# Debian-based aspnet image (not chiseled): it ships tzdata, which Africa/Cairo needs.
-# No RUN steps here, which is what keeps a cross-architecture build emulation-free.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+# Chiseled "extra" image: ships tzdata (Africa/Cairo) and ICU, but no shell or package manager,
+# so OS-package CVEs such as apt's never reach the image. It already runs as the non-root $APP_UID.
+# No RUN steps here (there is no shell anyway), which keeps a cross-architecture build emulation-free.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS final
 WORKDIR /app
 COPY --from=build /app .
 # Pre-created and owned by the app user: a fresh named volume mounted at /data/files inherits this ownership.
