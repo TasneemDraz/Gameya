@@ -11,7 +11,7 @@ public sealed class StartupGuardTests
 {
     private static Dictionary<string, string?> ValidProductionSettings() => new()
     {
-        ["ConnectionStrings:App"] = "Host=127.0.0.1;Port=1;Database=gameya;Username=gameya_app;Password=x",
+        ["ConnectionStrings:App"] = "Server=127.0.0.1,1;Database=gameya;User Id=x;Password=x;TrustServerCertificate=True;Connect Timeout=1",
         ["Security:HashKey"] = "test-hash-key-0123456789abcdef0123456789abcdef",
         ["Jwt:Issuer"] = "gameya-tests",
         ["Jwt:Audience"] = "gameya-tests",
