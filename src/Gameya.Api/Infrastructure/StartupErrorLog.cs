@@ -1,3 +1,5 @@
+using Gameya.Infrastructure.Time;
+
 namespace Gameya.Api.Infrastructure;
 
 /// <summary>
@@ -15,8 +17,8 @@ public static class StartupErrorLog
         {
             var path = Path.Combine(contentRoot, "logs", "startup-error.log");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            // No container exists yet, so IClock is unavailable; TimeProvider.System is the same wall clock.
-            var entry = $"{TimeProvider.System.GetUtcNow():O} {ex.GetType().FullName}{Environment.NewLine}"
+            // No container exists yet, so the clock is created directly; SystemClock stays the only time source.
+            var entry = $"{new SystemClock().UtcNow:O} {ex.GetType().FullName}{Environment.NewLine}"
                 + $"{RedactingEnricher.MaskPhones(ex.ToString())}{Environment.NewLine}{Environment.NewLine}";
             File.AppendAllText(path, entry);
         }
