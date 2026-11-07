@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Gameya.Infrastructure.Files;
+using Gameya.Application.Abstractions;
 using Gameya.Infrastructure.Persistence;
 using Hangfire;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -47,24 +47,13 @@ internal sealed class DatabaseHealthCheck(AppDbContext db) : IHealthCheck
             : HealthCheckResult.Unhealthy("Cannot connect to the database.");
 }
 
-/// <summary>The storage root must exist (it is created when missing) and accept a write.</summary>
-internal sealed class FilesHealthCheck(StorageRoot root) : IHealthCheck
+/// <summary>The configured file storage (local folder or S3 bucket) must accept a write.</summary>
+internal sealed class FilesHealthCheck(IStorageHealthProbe probe) : IHealthCheck
 {
-    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default)
-    {
-        try
-        {
-            Directory.CreateDirectory(root.Path);
-            var probe = Path.Combine(root.Path, $".health-{Guid.NewGuid():N}.tmp");
-            await File.WriteAllTextAsync(probe, "ok", ct);
-            File.Delete(probe);
-            return HealthCheckResult.Healthy();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return HealthCheckResult.Unhealthy("The files root is not writable.");
-        }
-    }
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default) =>
+        await probe.IsWritableAsync(ct)
+            ? HealthCheckResult.Healthy()
+            : HealthCheckResult.Unhealthy("The file storage is not writable.");
 }
 
 /// <summary>Reads the job statistics, which proves the Hangfire storage (schema <c>hangfire</c>) is reachable.</summary>

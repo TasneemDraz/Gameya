@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Gameya.Application.Abstractions;
 
 namespace Gameya.Infrastructure.Files;
@@ -7,10 +6,8 @@ namespace Gameya.Infrastructure.Files;
 /// Stores files under <c>{rootPath}/{container}/{key}</c>. Containers come from an allowlist and keys must
 /// match a strict pattern, so a caller-controlled value can never address a path outside the root.
 /// </summary>
-public sealed partial class LocalFileStore(string rootPath, SignedFileUrls urls) : IFileStore
+public sealed class LocalFileStore(string rootPath, SignedFileUrls urls) : IFileStore, IStorageHealthProbe
 {
-    private static readonly string[] Containers = [FileContainers.ProfilePhotos, FileContainers.Proofs];
-
     public async Task UploadAsync(
         string container, string key, Stream content, string contentType, CancellationToken cancellationToken)
     {
@@ -59,16 +56,27 @@ public sealed partial class LocalFileStore(string rootPath, SignedFileUrls urls)
     }
 
     public bool IsReadUrlValid(string container, string key, long expiresAtUnixSeconds, string signature) =>
-        IsAllowedLocation(container, key) && urls.IsValid(container, key, expiresAtUnixSeconds, signature);
+        FileLocation.IsAllowed(container, key) && urls.IsValid(container, key, expiresAtUnixSeconds, signature);
 
-    private static bool IsAllowedLocation(string container, string key) =>
-        Containers.Contains(container, StringComparer.Ordinal) && KeyPattern().IsMatch(key);
+    /// <summary>The root must exist (it is created when missing) and accept a write.</summary>
+    public async Task<bool> IsWritableAsync(CancellationToken ct)
+    {
+        try
+        {
+            Directory.CreateDirectory(rootPath);
+            var probe = Path.Combine(rootPath, $".health-{Guid.NewGuid():N}.tmp");
+            await File.WriteAllTextAsync(probe, "ok", ct);
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private string ResolvePath(string container, string key) =>
-        IsAllowedLocation(container, key)
+        FileLocation.IsAllowed(container, key)
             ? Path.Combine(rootPath, container, key)
             : throw new ArgumentException("Container or key is not allowed.");
-
-    [GeneratedRegex(@"^[0-9a-f-]{36}/[0-9a-f-]{36}\.jpg\z")]
-    private static partial Regex KeyPattern();
 }

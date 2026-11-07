@@ -12,6 +12,7 @@
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.Minio" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
 

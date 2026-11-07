@@ -6,7 +6,7 @@ using Testcontainers.MsSql;
 namespace Gameya.Api.IntegrationTests.Infrastructure;
 
 [CollectionDefinition(Name)]
-public sealed class DatabaseCollection : ICollectionFixture<DatabaseFixture>, ICollectionFixture<MailpitFixture>
+public sealed class DatabaseCollection : ICollectionFixture<DatabaseFixture>, ICollectionFixture<MailpitFixture>, ICollectionFixture<MinioFixture>
 {
     public const string Name = "database";
 }

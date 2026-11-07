@@ -56,7 +56,7 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// <c>Storage:UrlSigningKey</c> (at least 32 bytes) and <c>Storage:RootPath</c> are required. Development and
+    /// <c>Storage:UrlSigningKey</c> (at least 32 bytes) is required, and so is <c>Storage:RootPath</c> for the Local provider (the default) or <c>Storage:S3:*</c> for <c>Storage:Provider=S3</c>. Development and
     /// E2E fall back to a per-process random key (links live five minutes) and a folder under the content root.
     /// </summary>
     private static void AddFiles(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
@@ -67,6 +67,21 @@ public static class DependencyInjection
         if (string.IsNullOrEmpty(signingKey) || System.Text.Encoding.UTF8.GetByteCount(signingKey) < 32)
             throw new InvalidOperationException("Storage:UrlSigningKey must be configured with at least 32 bytes.");
 
+        services.AddSingleton(sp => new SignedFileUrls(signingKey, sp.GetRequiredService<IClock>()));
+
+        var provider = configuration["Storage:Provider"];
+        if (string.IsNullOrWhiteSpace(provider) || provider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+            AddLocalStore(services, configuration, environment);
+        else if (provider.Equals("S3", StringComparison.OrdinalIgnoreCase))
+            AddS3Store(services, configuration);
+        else
+            throw new InvalidOperationException("Storage:Provider must be 'Local' or 'S3'.");
+
+        services.AddSingleton<IImageProcessor, MagickImageProcessor>();
+    }
+
+    private static void AddLocalStore(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    {
         var rootPath = configuration["Storage:RootPath"];
         if (string.IsNullOrWhiteSpace(rootPath))
         {
@@ -77,10 +92,30 @@ public static class DependencyInjection
 
         var fullRoot = Path.GetFullPath(rootPath);
         services.AddSingleton(new StorageRoot(fullRoot));
-        services.AddSingleton(sp => new SignedFileUrls(signingKey, sp.GetRequiredService<IClock>()));
-        services.AddSingleton<IFileStore>(sp =>
-            new LocalFileStore(fullRoot, sp.GetRequiredService<SignedFileUrls>()));
-        services.AddSingleton<IImageProcessor, MagickImageProcessor>();
+        services.AddSingleton(sp => new LocalFileStore(fullRoot, sp.GetRequiredService<SignedFileUrls>()));
+        services.AddSingleton<IFileStore>(sp => sp.GetRequiredService<LocalFileStore>());
+        services.AddSingleton<IStorageHealthProbe>(sp => sp.GetRequiredService<LocalFileStore>());
+    }
+
+    private static void AddS3Store(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = configuration.GetSection(S3StorageOptions.Section).Get<S3StorageOptions>() ?? new S3StorageOptions();
+        Require(options.ServiceUrl, nameof(options.ServiceUrl));
+        Require(options.Bucket, nameof(options.Bucket));
+        Require(options.AccessKeyId, nameof(options.AccessKeyId));
+        Require(options.SecretAccessKey, nameof(options.SecretAccessKey));
+        Require(options.Region, nameof(options.Region));
+
+        services.AddSingleton(sp =>
+            new S3FileStore(S3ClientFactory.Create(options), options.Bucket, sp.GetRequiredService<SignedFileUrls>()));
+        services.AddSingleton<IFileStore>(sp => sp.GetRequiredService<S3FileStore>());
+        services.AddSingleton<IStorageHealthProbe>(sp => sp.GetRequiredService<S3FileStore>());
+
+        static void Require(string value, string name)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                throw new InvalidOperationException($"Storage:S3:{name} is required when Storage:Provider is 'S3'.");
+        }
     }
 
     /// <summary>

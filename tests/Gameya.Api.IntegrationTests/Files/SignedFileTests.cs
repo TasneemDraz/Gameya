@@ -12,8 +12,13 @@ public sealed class SignedFileTests : IDisposable
     private readonly GameyaApiFactory _factory;
     private readonly HttpClient _client;
 
-    public SignedFileTests(DatabaseFixture db)
+    private readonly DatabaseFixture _db;
+    private readonly MinioFixture _minio;
+
+    public SignedFileTests(DatabaseFixture db, MinioFixture minio)
     {
+        _db = db;
+        _minio = minio;
         _factory = new GameyaApiFactory(db);
         _client = _factory.CreateClient();
     }
@@ -39,6 +44,22 @@ public sealed class SignedFileTests : IDisposable
     }
 
     private static Uri Parse(string url) => new("http://localhost" + url);
+
+    [Fact]
+    public async Task Signed_read_works_against_the_s3_provider()
+    {
+        using var factory = new GameyaApiFactory(_db, settings: _minio.ApiSettings());
+        using var client = factory.CreateClient();
+        await TestApi.LoginAsync(factory, client);
+        var upload = await TestApi.UploadPhotoAsync(client, TestApi.TestFile("photo.jpg"));
+        upload.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var url = (await TestApi.JsonAsync(upload)).GetProperty("photoUrl").GetString()!;
+
+        var response = await client.GetAsync(url);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("image/jpeg");
+    }
 
     [Fact]
     public async Task Tampered_signature_returns_403_FORBIDDEN()
