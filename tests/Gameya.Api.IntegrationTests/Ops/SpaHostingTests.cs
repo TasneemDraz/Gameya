@@ -25,7 +25,7 @@ public sealed class SpaHostingTests : IDisposable
     {
         _client.Dispose();
         _factory.Dispose();
-        Directory.Delete(_webRoot, recursive: true);
+        TempDirectory.DeleteWithRetry(_webRoot);
     }
 
     [Fact]

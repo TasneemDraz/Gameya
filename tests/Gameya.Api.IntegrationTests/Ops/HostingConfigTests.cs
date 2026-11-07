@@ -28,7 +28,7 @@ public sealed class HostingConfigTests : IDisposable
     public void Dispose()
     {
         _factory?.Dispose();
-        Directory.Delete(_root, recursive: true);
+        TempDirectory.DeleteWithRetry(_root);
     }
 
     private GameyaApiFactory Create(IReadOnlyDictionary<string, string?>? settings = null) =>

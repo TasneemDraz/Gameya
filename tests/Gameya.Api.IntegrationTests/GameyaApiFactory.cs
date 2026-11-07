@@ -93,7 +93,7 @@ public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? m
         base.Dispose(disposing);
         if (disposing && Directory.Exists(StorageRoot))
         {
-            Directory.Delete(StorageRoot, recursive: true);
+            TempDirectory.DeleteWithRetry(StorageRoot);
         }
     }
 }
