@@ -11,7 +11,7 @@ using Serilog.Core;
 namespace Gameya.Api.IntegrationTests;
 
 /// <summary>Hosts the API in the E2E environment against the Testcontainers SQL Server database, using a single login.</summary>
-public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? mail = null, string? storageRoot = null, IReadOnlyDictionary<string, string?>? settings = null) : WebApplicationFactory<Program>
+public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? mail = null, string? storageRoot = null, IReadOnlyDictionary<string, string?>? settings = null, string? webRoot = null) : WebApplicationFactory<Program>
 {
     public DatabaseFixture Database => database;
 
@@ -43,6 +43,11 @@ public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? m
         builder.UseSetting("Jwt:Issuer", "gameya-tests");
         builder.UseSetting("Jwt:Audience", "gameya-tests");
         builder.UseSetting("Jwt:SigningKey", "test-signing-key-0123456789abcdef0123456789abcdef");
+
+        if (webRoot is not null)
+        {
+            builder.UseWebRoot(webRoot);
+        }
 
         foreach (var (name, value) in settings ?? new Dictionary<string, string?>())
         {

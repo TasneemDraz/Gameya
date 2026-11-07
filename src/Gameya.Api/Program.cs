@@ -69,8 +69,10 @@ if (args.Contains("--migrate"))
 }
 
 app.UseForwardedHeaders();
+app.UseGameyaSecurityHeaders();
 app.UseObservability();
 app.UseExceptionHandler();
+app.UseGameyaSpaStaticFiles();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -88,6 +90,9 @@ if (app.Environment.IsDevelopment())
 {
     app.MapDevHangfireDashboard();
 }
+
+// Last, so every real endpoint wins over the SPA shell.
+app.MapGameyaSpaFallback();
 
 app.Run();
 
