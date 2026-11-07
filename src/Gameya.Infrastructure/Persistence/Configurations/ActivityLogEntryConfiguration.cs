@@ -8,7 +8,7 @@ public sealed class ActivityLogEntryConfiguration : IEntityTypeConfiguration<Act
 {
     public void Configure(EntityTypeBuilder<ActivityLogEntry> builder)
     {
-        builder.ToTable("activity_log");
+        builder.ToTable("activity_log", tb => tb.HasTrigger("trg_activity_log_append_only"));
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).ValueGeneratedOnAdd();
 

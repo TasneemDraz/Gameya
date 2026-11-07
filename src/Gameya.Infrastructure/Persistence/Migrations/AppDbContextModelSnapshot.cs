@@ -78,7 +78,12 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                     b.HasIndex("GameyaId", "OccurredAt")
                         .HasDatabaseName("ix_activity_log_gameya_id_occurred_at");
 
-                    b.ToTable("activity_log", (string)null);
+                    b.ToTable("activity_log", null, t =>
+                        {
+                            t.HasTrigger("trg_activity_log_append_only");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("Gameya.Domain.Auth.OtpChallenge", b =>

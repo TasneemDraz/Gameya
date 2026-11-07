@@ -41,22 +41,35 @@ public class ActivityLogImmutabilityTests(DatabaseFixture fixture)
         return await Should.ThrowAsync<SqlException>(() => cmd.ExecuteNonQueryAsync());
     }
 
-    [Fact(Skip = "Task 2")]
-    public async Task App_role_cannot_update_activity_log()
+    [Fact]
+    public async Task App_login_cannot_update_activity_log()
     {
         await InsertEntryAsync("A");
 
-        // Task 2 adds the append-only trigger and asserts the error it raises.
-        await ExecuteAsAppAsync("UPDATE activity_log SET action = 'X'");
+        var ex = await ExecuteAsAppAsync("UPDATE activity_log SET action = 'X'");
+
+        ex.Number.ShouldBe(51001);
     }
 
-    [Fact(Skip = "Task 2")]
-    public async Task App_role_cannot_delete_activity_log()
+    [Fact]
+    public async Task App_login_cannot_delete_activity_log()
     {
         await InsertEntryAsync("A");
 
-        // Task 2 adds the append-only trigger and asserts the error it raises.
-        await ExecuteAsAppAsync("DELETE FROM activity_log");
+        var ex = await ExecuteAsAppAsync("DELETE FROM activity_log");
+
+        ex.Number.ShouldBe(51001);
+    }
+
+    [Fact]
+    public async Task Insert_still_works()
+    {
+        await using var db = fixture.CreateAppContext();
+        var before = await db.ActivityLog.CountAsync();
+
+        await InsertEntryAsync("A");
+
+        (await db.ActivityLog.CountAsync()).ShouldBe(before + 1);
     }
 
     [Fact]
