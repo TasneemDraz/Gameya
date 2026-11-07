@@ -13,8 +13,28 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 
 // Secrets come from a file in the content root (never wwwroot), resolved against the host's content root
-// rather than the working directory, which IIS sets differently.
-builder.Configuration.AddJsonFile(builder.Environment.ContentRootFileProvider, "secrets.json", optional: true, reloadOnChange: false);
+// rather than the working directory, which IIS sets differently. The source sits right after the appsettings
+// files, so environment variables, the command line and host settings still override it.
+{
+    var sources = builder.Configuration.Sources;
+    var lastAppSettings = -1;
+    for (var i = 0; i < sources.Count; i++)
+    {
+        if (sources[i] is Microsoft.Extensions.Configuration.Json.JsonConfigurationSource json
+            && Path.GetFileName(json.Path)?.StartsWith("appsettings", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            lastAppSettings = i;
+        }
+    }
+
+    sources.Insert(lastAppSettings + 1, new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource
+    {
+        FileProvider = builder.Environment.ContentRootFileProvider,
+        Path = "secrets.json",
+        Optional = true,
+        ReloadOnChange = false
+    });
+}
 
 // Kestrel adds its Server header after OnStarting callbacks run, so it can only be switched off here.
 builder.WebHost.ConfigureKestrel(o => o.AddServerHeader = false);

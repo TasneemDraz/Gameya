@@ -52,12 +52,25 @@ public sealed class HostingConfigTests : IDisposable
     {
         File.WriteAllText(
             Path.Combine(_contentRoot, "secrets.json"),
-            """{"App":{"WebBaseUrl":"https://from-secrets.test"}}""");
-        var factory = Create(new Dictionary<string, string?> { ["App:WebBaseUrl"] = null });
+            """{"Sample":{"FromSecrets":"https://from-secrets.test"}}""");
+        var factory = Create();
 
         var configuration = factory.Services.GetRequiredService<IConfiguration>();
 
-        configuration["App:WebBaseUrl"].ShouldBe("https://from-secrets.test");
+        configuration["Sample:FromSecrets"].ShouldBe("https://from-secrets.test");
+    }
+
+    [Fact]
+    public void Factory_settings_win_over_secrets_json()
+    {
+        File.WriteAllText(
+            Path.Combine(_contentRoot, "secrets.json"),
+            """{"App":{"WebBaseUrl":"https://from-secrets.test"}}""");
+        var factory = Create(new Dictionary<string, string?> { ["App:WebBaseUrl"] = "https://from-settings.test" });
+
+        var configuration = factory.Services.GetRequiredService<IConfiguration>();
+
+        configuration["App:WebBaseUrl"].ShouldBe("https://from-settings.test");
     }
 
     [Fact]
@@ -67,7 +80,6 @@ public sealed class HostingConfigTests : IDisposable
         using var client = factory.CreateClient();
 
         factory.Services.GetRequiredService<ILogger>().Information("call from {Phone}", "01012345678");
-        await Task.Delay(100);
 
         var logs = Directory.GetFiles(Path.Combine(_contentRoot, "logs"), "test-*.json");
         logs.Length.ShouldBe(1);

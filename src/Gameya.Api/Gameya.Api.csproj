@@ -6,6 +6,9 @@
     <!-- Secrets live only on the server, in the content root. They must never reach a publish output. -->
     <Content Remove="secrets.json" />
     <None Remove="secrets.json" />
+    <!-- Rolling file logs are written next to the app and must not be published. -->
+    <Content Remove="logs/**" />
+    <None Remove="logs/**" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />

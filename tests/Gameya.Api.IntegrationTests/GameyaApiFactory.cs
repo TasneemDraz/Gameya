@@ -4,6 +4,7 @@ using Gameya.Application.Abstractions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Serilog.Core;
@@ -54,6 +55,19 @@ public sealed class GameyaApiFactory(DatabaseFixture database, MailpitFixture? m
             }
 
             builder.UseContentRoot(contentRoot);
+        }
+
+        if (contentRoot is null)
+        {
+            // Defence in depth: a developer's own src/Gameya.Api/secrets.json must never feed the test suite.
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                foreach (var source in config.Sources.OfType<JsonConfigurationSource>()
+                             .Where(s => string.Equals(s.Path, "secrets.json", StringComparison.OrdinalIgnoreCase)).ToList())
+                {
+                    config.Sources.Remove(source);
+                }
+            });
         }
 
         if (webRoot is not null)
