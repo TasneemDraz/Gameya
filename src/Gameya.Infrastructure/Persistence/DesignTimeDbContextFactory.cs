@@ -16,7 +16,7 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<App
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Migrator");
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new InvalidOperationException(
-                "ConnectionStrings__Migrator is not set. Set this environment variable to the gameya_migrator connection string before running dotnet ef or the migrations bundle.");
+                "ConnectionStrings__Migrator is not set. Set this environment variable to a SQL Server connection string (a login that can alter the schema) before running dotnet ef or the migrations bundle.");
         var builder = new DbContextOptionsBuilder<AppDbContext>();
         AppDbContext.Configure(builder, connectionString);
         return new AppDbContext(builder.Options);

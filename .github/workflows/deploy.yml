@@ -67,10 +67,15 @@ jobs:
             'B2_S3_ENDPOINT', 'B2_FILES_BUCKET', 'B2_KEY_ID', 'B2_APP_KEY', 'B2_REGION',
             'EMAIL_FROM', 'SMTP_USERNAME', 'SMTP_PASSWORD'
           # SmsGate is the default provider; its credentials are required unless another provider is chosen.
-          if ([string]::IsNullOrWhiteSpace($env:SMS_PROVIDER) -or $env:SMS_PROVIDER -eq 'SmsGate') {
+          if ([string]::IsNullOrWhiteSpace($env:SMS_PROVIDER) -or $env:SMS_PROVIDER -ceq 'SmsGate') {
             $names += 'SMSGATE_USERNAME', 'SMSGATE_PASSWORD'
           }
           $bad = $false
+          # Staging and Production only support SmsGate.
+          if (-not [string]::IsNullOrWhiteSpace($env:SMS_PROVIDER) -and $env:SMS_PROVIDER -cne 'SmsGate') {
+            Write-Host "::error::SMS_PROVIDER must be exactly SmsGate (or unset) for Staging and Production"
+            $bad = $true
+          }
           foreach ($name in $names) {
             if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
               Write-Host "::error::required secret $name is empty or not set"
@@ -214,7 +219,7 @@ jobs:
       - name: Upload the site (without secrets.json)
         uses: actions/upload-artifact@v4
         with:
-          name: site-${{ github.sha }}
+          name: site-${{ replace(inputs.ref || github.sha, '/', '-') }}
           path: |
             site/
             !site/secrets.json

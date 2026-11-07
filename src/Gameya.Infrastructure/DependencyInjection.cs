@@ -19,8 +19,8 @@ public static class DependencyInjection
         environment.IsDevelopment() || environment.IsEnvironment("E2E");
 
     /// <summary>
-    /// Runtime uses the restricted <c>ConnectionStrings:App</c> role; <c>ConnectionStrings:Migrator</c>
-    /// is only for the migration runner.
+    /// Runtime uses <c>ConnectionStrings:App</c>; <c>ConnectionStrings:Migrator</c> is only for the migration
+    /// runner. On SQL Server both may point at the same single login.
     /// </summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
