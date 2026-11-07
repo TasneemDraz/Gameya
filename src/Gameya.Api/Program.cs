@@ -49,6 +49,7 @@ try
     builder.AddObservability();
     builder.Services.AddBackgroundJobs(builder.Configuration);
     builder.Services.AddGameyaHealthChecks();
+    builder.Services.AddGameyaSpaCompression();
 
     builder.Services.AddApplication(builder.Configuration);
     builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
@@ -129,7 +130,8 @@ try
 
     app.Run();
 }
-catch (Exception ex)
+// HostAbortedException is how EF tooling stops the host on purpose after Build(); it is not a startup failure.
+catch (Exception ex) when (ex is not HostAbortedException)
 {
     StartupErrorLog.Write(contentRoot, ex);
     throw;

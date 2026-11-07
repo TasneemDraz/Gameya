@@ -48,6 +48,34 @@ public sealed class SpaHostingTests : IDisposable
         response.Headers.CacheControl!.ToString().ShouldBe("no-cache");
     }
 
+    [Theory]
+    [InlineData("gzip")]
+    [InlineData("br")]
+    public async Task Hashed_asset_is_compressed_when_the_client_accepts_it(string encoding)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/main-ABCD1234.js");
+        request.Headers.AcceptEncoding.ParseAdd(encoding);
+
+        var response = await _client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Content.Headers.ContentEncoding.ShouldBe([encoding]);
+    }
+
+    [Theory]
+    [InlineData("/api/me")]
+    [InlineData("/health")]
+    public async Task Json_responses_are_never_compressed(string path)
+    {
+        // Authenticated JSON can carry tokens next to request-controlled text; compressing it invites BREACH.
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.AcceptEncoding.ParseAdd("gzip, br");
+
+        var response = await _client.SendAsync(request);
+
+        response.Content.Headers.ContentEncoding.ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task Missing_file_with_extension_is_404_not_index()
     {

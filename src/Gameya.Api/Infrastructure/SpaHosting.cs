@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.StaticFiles;
 
 namespace Gameya.Api.Infrastructure;
@@ -23,9 +24,24 @@ public static partial class SpaHosting
         }
     };
 
+    /// <summary>
+    /// Compresses the SPA's own files only (scripts, styles, HTML, SVG). JSON is left alone: API responses carry
+    /// tokens next to request-controlled text, and compressing them would invite BREACH. IIS static compression
+    /// does not apply here because the app, not IIS, serves these files.
+    /// </summary>
+    public static IServiceCollection AddGameyaSpaCompression(this IServiceCollection services) =>
+        services.AddResponseCompression(o =>
+        {
+            o.EnableForHttps = true;
+            o.MimeTypes = ["text/javascript", "application/javascript", "text/css", "text/html", "image/svg+xml"];
+            o.Providers.Add<BrotliCompressionProvider>();
+            o.Providers.Add<GzipCompressionProvider>();
+        });
+
     /// <summary>A missing wwwroot (Development without a build) is fine: nothing is found and the request moves on.</summary>
     public static IApplicationBuilder UseGameyaSpaStaticFiles(this IApplicationBuilder app)
     {
+        app.UseResponseCompression();
         app.UseDefaultFiles();
         app.UseStaticFiles(Options());
         // WebApplication adds UseRouting at the very start unless the app calls it. The catch-all fallback endpoint
