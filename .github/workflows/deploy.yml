@@ -55,10 +55,21 @@ jobs:
           B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
           B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
           B2_REGION: ${{ secrets.B2_REGION }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMS_PROVIDER: ${{ secrets.SMS_PROVIDER }}
+          SMSGATE_USERNAME: ${{ secrets.SMSGATE_USERNAME }}
+          SMSGATE_PASSWORD: ${{ secrets.SMSGATE_PASSWORD }}
         run: |
           $names = 'DB_CONNECTION_STRING', 'JWT_SIGNING_KEY', 'SECURITY_HASH_KEY', 'STORAGE_URL_SIGNING_KEY',
             'WEBDEPLOY_SERVER', 'WEBDEPLOY_SITE', 'WEBDEPLOY_USERNAME', 'WEBDEPLOY_PASSWORD', 'SITE_URL',
-            'B2_S3_ENDPOINT', 'B2_FILES_BUCKET', 'B2_KEY_ID', 'B2_APP_KEY', 'B2_REGION'
+            'B2_S3_ENDPOINT', 'B2_FILES_BUCKET', 'B2_KEY_ID', 'B2_APP_KEY', 'B2_REGION',
+            'EMAIL_FROM', 'SMTP_USERNAME', 'SMTP_PASSWORD'
+          # SmsGate is the default provider; its credentials are required unless another provider is chosen.
+          if ([string]::IsNullOrWhiteSpace($env:SMS_PROVIDER) -or $env:SMS_PROVIDER -eq 'SmsGate') {
+            $names += 'SMSGATE_USERNAME', 'SMSGATE_PASSWORD'
+          }
           $bad = $false
           foreach ($name in $names) {
             if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
