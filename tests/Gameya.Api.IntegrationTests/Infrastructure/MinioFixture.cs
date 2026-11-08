@@ -9,7 +9,7 @@ public sealed class MinioFixture : IAsyncLifetime
 {
     public const string Bucket = "gameya-test";
 
-    private readonly MinioContainer _container = new MinioBuilder("cgr.dev/chainguard/minio:latest").Build();
+    private readonly MinioContainer _container = new MinioBuilder("cgr.dev/chainguard/minio:latest@sha256:869ca3178831d9f521ea02258a0f0d4fbc1e9f84302e707514e1f861b860865d").Build();
 
     public S3StorageOptions Options { get; private set; } = null!;
 

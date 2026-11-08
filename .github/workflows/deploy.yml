@@ -1,36 +1,59 @@
 name: Deploy
 
-# push to main -> staging; push of a v* tag -> production (GitHub Environment with a required reviewer).
-# workflow_dispatch redeploys any tag or sha (rollback): a v* ref goes to production, anything else to staging.
+# push to main -> staging; push of a release tag (v1.2.3) -> production (GitHub Environment with a required reviewer).
+# workflow_dispatch redeploys any tag or sha (rollback): a release tag (v1.2.3) goes to production, anything else to staging.
 # Target: MonsterASP.NET over WebDeploy. Secrets are per GitHub Environment; see docs/deployment.md.
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    # Release tags only (v1.2.3); a stray tag such as "v-test" or "vnext" never starts a production deploy.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag or commit sha to deploy (rollback). A v* tag deploys to production, anything else to staging."
+        description: 'Tag or commit sha to deploy (rollback). A release tag (v1.2.3) deploys to production, anything else to staging.'
         required: true
         type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: deploy-${{ (github.ref_type == 'tag' || startsWith(inputs.ref, 'v')) && 'production' || 'staging' }}
-  cancel-in-progress: false
-
 env:
-  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
 
 jobs:
+  # Expressions have no regex, so the target is decided here: only an exact release tag (v1.2.3) is production.
+  route:
+    name: route
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      aspnetcore: ${{ steps.pick.outputs.aspnetcore }}
+    steps:
+      - id: pick
+        env:
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+            echo "aspnetcore=Production" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
+            echo "aspnetcore=Staging" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Deploying $REF"
+
   deploy:
     name: deploy
+    needs: route
     runs-on: windows-latest
     timeout-minutes: 45
-    environment: ${{ (github.ref_type == 'tag' || startsWith(inputs.ref, 'v')) && 'production' || 'staging' }}
+    environment: ${{ needs.route.outputs.environment }}
+    concurrency:
+      group: deploy-${{ needs.route.outputs.environment }}
+      cancel-in-progress: false
     defaults:
       run:
         shell: pwsh
@@ -123,7 +146,7 @@ jobs:
 
       - name: Write secrets.json and set the environment name
         env:
-          DEPLOY_ASPNETCORE_ENVIRONMENT: ${{ (github.ref_type == 'tag' || startsWith(inputs.ref, 'v')) && 'Production' || 'Staging' }}
+          DEPLOY_ASPNETCORE_ENVIRONMENT: ${{ needs.route.outputs.aspnetcore }}
           ConnectionStrings__App: ${{ secrets.DB_CONNECTION_STRING }}
           ConnectionStrings__Migrator: ${{ secrets.DB_CONNECTION_STRING }}
           Jwt__Issuer: gameya
@@ -141,7 +164,7 @@ jobs:
           Email__Smtp__Port: ${{ secrets.SMTP_PORT || '587' }}
           Email__Smtp__Username: ${{ secrets.SMTP_USERNAME }}
           Email__Smtp__Password: ${{ secrets.SMTP_PASSWORD }}
-          Email__Smtp__UseStartTls: "true"
+          Email__Smtp__UseStartTls: 'true'
           Email__From: ${{ secrets.EMAIL_FROM }}
           Sms__Provider: ${{ secrets.SMS_PROVIDER || 'SmsGate' }}
           Sms__SmsGate__BaseUrl: ${{ secrets.SMSGATE_BASE_URL || 'https://api.sms-gate.app/3rdparty/v1' }}

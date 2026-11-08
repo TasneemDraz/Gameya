@@ -5,7 +5,7 @@ Gam'eya runs on one MonsterASP.NET site per environment (`staging` and `producti
 | Branch or tag | Environment  | Trigger                                                           |
 | ------------- | ------------ | ----------------------------------------------------------------- |
 | `main`        | `staging`    | `.github/workflows/deploy.yml` on every push to `main`            |
-| `v*` tag      | `production` | the same workflow, after the GitHub Environment reviewer approves |
+| `v1.2.3` tag  | `production` | the same workflow, after the GitHub Environment reviewer approves |
 
 ## Hosting map
 
@@ -82,7 +82,7 @@ Protect `main` so a merge needs these status checks from `ci.yml` (names as in t
 
 ## What a deploy does
 
-`deploy.yml` runs on a Windows runner. It starts on a push to `main` (staging), a push of a `v*` tag (production, after the reviewer approves) or a manual run (see "Rollback"). Deploys to the same environment queue one after another and are never cancelled half way.
+`deploy.yml` runs on a Windows runner. It starts on a push to `main` (staging), a push of a release tag such as `v1.2.3` (production, after the reviewer approves) or a manual run (see "Rollback"). Deploys to the same environment queue one after another and are never cancelled half way.
 
 1. **Preflight.** Checks the required secrets (see above). Nothing has changed yet if it fails.
 2. **Domain tests.** `dotnet test tests/Gameya.Domain.Tests` proves `Africa/Cairo` resolves on Windows.
@@ -113,7 +113,7 @@ Migrations run before the new files go live, and they are not rolled back. Every
 
 There is no automatic rollback. A failed health poll fails the job and leaves the new files in place.
 
-To go back, open Actions, choose **Deploy**, click **Run workflow** and enter the previous tag in `ref` (for example `v1.2.0`). A `v*` ref deploys to production (with the reviewer approval); any other ref, such as a commit sha, deploys to staging.
+To go back, open Actions, choose **Deploy**, click **Run workflow** and enter the previous tag in `ref` (for example `v1.2.0`). Only an exact release tag (`v1.2.3`) deploys to production (with the reviewer approval); any other ref, such as a commit sha, deploys to staging.
 
 Migrations are not rolled back, so the older release has to work with the newer schema. This is why every migration follows the expand/contract rule.
 
@@ -170,7 +170,7 @@ Also confirm once, on staging:
 
 - msdeploy authenticates (Basic, port 8172), `logs/` survives a second deploy, and `secrets.json` is on the server but not in the workflow artifact.
 - `GET /secrets.json` and `GET /appsettings.json` return 404.
-- A rollback run (Run workflow with a previous tag or sha) works, and a `v*` tag push stops at the production approval gate.
+- A rollback run (Run workflow with a previous tag or sha) works, and a release-tag push stops at the production approval gate.
 - Compression works: request a hashed `.js` file with `Accept-Encoding: gzip` (for example `curl -s -o /dev/null -D - -H "Accept-Encoding: gzip" https://<staging-site>/main-XXXX.js`) and the response has `Content-Encoding: gzip`. The app compresses only the SPA's files (scripts, styles, HTML, SVG), not IIS. JSON is never compressed on purpose: API responses carry tokens, and compressing them invites BREACH.
 - HTTP 500.19 right after the first deploy probably means the host locks the `system.webServer/webSocket` section. Remove `<webSocket enabled="true" />` from `web.config` and deploy again.
 - `Africa/Cairo` resolves on the host (ICU present). Any request that uses `CairoCalendar` throws if it does not. This only matters once features use it.
