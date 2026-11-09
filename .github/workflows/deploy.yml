@@ -229,14 +229,27 @@ jobs:
           $deadline = (Get-Date).AddMinutes(5)
           while ($true) {
             $status = 'unreachable'
+            $detail = ''
             try {
               $response = Invoke-WebRequest -Uri $url -SkipHttpErrorCheck -TimeoutSec 20
-              $status = ($response.Content | ConvertFrom-Json).status
+              $detail = "HTTP $($response.StatusCode)"
+              try {
+                $body = $response.Content | ConvertFrom-Json
+                $status = $body.status
+                $parts = $body.entries.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value.status)" }
+                $detail += ' ' + ($parts -join ' ')
+              }
+              catch {
+                # Not the health JSON (for example an IIS 500.30 page): show the start of it so the cause is visible.
+                $status = 'not-json'
+                $text = (($response.Content -replace '<[^>]+>', ' ') -replace '\s+', ' ').Trim()
+                $detail += ': ' + $text.Substring(0, [Math]::Min(400, $text.Length))
+              }
             }
             catch {
-              $status = 'unreachable'
+              $detail = $_.Exception.Message
             }
-            Write-Host "$(Get-Date -Format o) $url -> $status"
+            Write-Host "$(Get-Date -Format o) $url -> $status ($detail)"
             if ($status -ceq 'Healthy') { break }
             if ((Get-Date) -ge $deadline) { throw "$url did not report Healthy within 5 minutes (last: $status)" }
             Start-Sleep -Seconds 10
