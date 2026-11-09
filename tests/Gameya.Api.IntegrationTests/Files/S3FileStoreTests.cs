@@ -1,6 +1,7 @@
 using Gameya.Api.IntegrationTests.Infrastructure;
 using Gameya.Application.Abstractions;
 using Gameya.Infrastructure.Files;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Gameya.Api.IntegrationTests.Files;
 
@@ -12,7 +13,7 @@ public sealed class S3FileStoreTests(MinioFixture minio)
     private static SignedFileUrls Urls() => new(GameyaApiFactory.UrlSigningKey, new MutableClock(DateTimeOffset.UtcNow));
 
     private S3FileStore Store(string? bucket = null) =>
-        new(minio.CreateClient(), bucket ?? MinioFixture.Bucket, Urls());
+        new(minio.CreateClient(), bucket ?? MinioFixture.Bucket, Urls(), NullLogger<S3FileStore>.Instance);
 
     [Fact]
     public async Task Upload_then_open_read_returns_same_bytes()

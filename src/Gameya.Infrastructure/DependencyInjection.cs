@@ -9,6 +9,7 @@ using Gameya.Infrastructure.Time;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Gameya.Infrastructure;
 
@@ -107,7 +108,9 @@ public static class DependencyInjection
         Require(options.Region, nameof(options.Region));
 
         services.AddSingleton(sp =>
-            new S3FileStore(S3ClientFactory.Create(options), options.Bucket, sp.GetRequiredService<SignedFileUrls>()));
+            new S3FileStore(
+                S3ClientFactory.Create(options), options.Bucket, sp.GetRequiredService<SignedFileUrls>(),
+                sp.GetRequiredService<ILogger<S3FileStore>>()));
         services.AddSingleton<IFileStore>(sp => sp.GetRequiredService<S3FileStore>());
         services.AddSingleton<IStorageHealthProbe>(sp => sp.GetRequiredService<S3FileStore>());
 

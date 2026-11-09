@@ -3,6 +3,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Gameya.Application.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Gameya.Infrastructure.Files;
 
@@ -10,7 +11,8 @@ namespace Gameya.Infrastructure.Files;
 /// Stores files as objects named <c>{container}/{key}</c> in one bucket. Reads still go through the API's
 /// signed URLs, so the bucket stays private.
 /// </summary>
-public sealed class S3FileStore(IAmazonS3 s3, string bucket, SignedFileUrls urls) : IFileStore, IStorageHealthProbe
+public sealed class S3FileStore(IAmazonS3 s3, string bucket, SignedFileUrls urls, ILogger<S3FileStore> logger)
+    : IFileStore, IStorageHealthProbe
 {
     public async Task UploadAsync(
         string container, string key, Stream content, string contentType, CancellationToken cancellationToken)
@@ -89,6 +91,12 @@ public sealed class S3FileStore(IAmazonS3 s3, string bucket, SignedFileUrls urls
         }
         catch (Exception ex) when (ex is AmazonServiceException or AmazonClientException or HttpRequestException)
         {
+            // /health only shows "Unhealthy", so the reason (wrong region, key without write access, unknown
+            // bucket...) is logged here. The S3 error code and message never contain the secret key.
+            logger.LogWarning(
+                "File storage probe failed for bucket {Bucket}: {ExceptionType} {ErrorCode} {StatusCode} {Message}",
+                bucket, ex.GetType().Name, (ex as AmazonServiceException)?.ErrorCode,
+                (ex as AmazonServiceException)?.StatusCode, ex.Message);
             return false;
         }
     }
