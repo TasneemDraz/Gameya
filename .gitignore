@@ -500,3 +500,6 @@ dist/
 npm-debug.log*
 coverage/
 *.tsbuildinfo
+
+# tools/publish-site.ps1 output
+/site/
