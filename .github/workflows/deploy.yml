@@ -127,6 +127,9 @@ jobs:
         run: |
           dotnet tool restore
           if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed" }
+          # The domain tests only restore the Domain project; the bundle needs Infrastructure restored for win-x64.
+          dotnet restore src/Gameya.Infrastructure -r win-x64
+          if ($LASTEXITCODE -ne 0) { throw "restore for the migrations bundle failed" }
           dotnet ef migrations bundle -p src/Gameya.Infrastructure -s src/Gameya.Infrastructure -r win-x64 --self-contained -o efbundle.exe --force
           if ($LASTEXITCODE -ne 0) { throw "efbundle build failed" }
 
