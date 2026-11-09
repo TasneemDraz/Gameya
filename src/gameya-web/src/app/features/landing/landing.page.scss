@@ -1,0 +1,33 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.points li,
+.notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.notice {
+  padding: 12px;
+  margin: 0;
+  background: var(--gy-info-bg, #e8f0fe);
+  border-radius: 8px;
+}

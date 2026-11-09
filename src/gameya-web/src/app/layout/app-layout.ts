@@ -1,0 +1,81 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { TranslocoPipe } from '@jsverse/transloco';
+import { map } from 'rxjs';
+import { LanguageService } from '../core/i18n/language.service';
+
+const WIDE_QUERY = '(min-width: 960px)';
+
+/** Signed-in shell: sidenav at 960px and wider, bottom nav below. */
+@Component({
+  selector: 'gy-app-layout',
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    MatToolbarModule,
+    MatSidenavModule,
+    MatButtonModule,
+    MatIconModule,
+    TranslocoPipe,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <mat-toolbar class="bar">
+      <span class="brand">{{ 'app.name' | transloco }}</span>
+      <button mat-button type="button" class="lang-toggle" (click)="toggle()">
+        {{ 'common.otherLanguage' | transloco }}
+      </button>
+    </mat-toolbar>
+
+    @if (wide()) {
+      <mat-sidenav-container class="shell">
+        <mat-sidenav mode="side" opened class="side">
+          <nav class="side-nav" [attr.aria-label]="'app.navigation' | transloco">
+            <a
+              mat-button
+              routerLink="/profile"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: true }"
+            >
+              <mat-icon>home</mat-icon>
+              {{ 'nav.home' | transloco }}
+            </a>
+          </nav>
+        </mat-sidenav>
+        <mat-sidenav-content class="content"><router-outlet /></mat-sidenav-content>
+      </mat-sidenav-container>
+    } @else {
+      <main class="content"><router-outlet /></main>
+      <nav class="bottom-nav" [attr.aria-label]="'app.navigation' | transloco">
+        <a
+          routerLink="/profile"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          <mat-icon>home</mat-icon>
+          <span>{{ 'nav.home' | transloco }}</span>
+        </a>
+      </nav>
+    }
+  `,
+  styleUrl: './app-layout.scss',
+})
+export class AppLayout {
+  private readonly lang = inject(LanguageService);
+  private readonly bp = inject(BreakpointObserver);
+
+  readonly wide = toSignal(this.bp.observe(WIDE_QUERY).pipe(map((s) => s.matches)), {
+    initialValue: this.bp.isMatched(WIDE_QUERY),
+  });
+
+  toggle(): void {
+    this.lang.use(this.lang.current() === 'ar' ? 'en' : 'ar');
+  }
+}

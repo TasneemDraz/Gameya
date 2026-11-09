@@ -1,0 +1,7 @@
+{
+  "extends": ["stylelint-config-standard-scss"],
+  "plugins": ["stylelint-use-logical"],
+  "rules": {
+    "csstools/use-logical": ["always", { "except": [] }]
+  }
+}

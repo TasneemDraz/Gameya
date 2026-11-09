@@ -1,0 +1,41 @@
+@use '@angular/material' as mat;
+@use 'fonts';
+
+html {
+  @include mat.theme(
+    (
+      color: (
+        theme-type: light,
+        primary: mat.$green-palette,
+        tertiary: mat.$orange-palette,
+      ),
+      typography: (
+        plain-family: fonts.$font-stack,
+        brand-family: fonts.$font-stack,
+      ),
+      density: 0,
+    )
+  );
+
+  // Design tokens used by app components (status tones, navigation).
+  --gy-primary: #1b6b3a;
+  --gy-outline: #c4c7c5;
+  --gy-surface-nav: #fff;
+  --gy-neutral-fg: #3c4043;
+  --gy-neutral-bg: #eceff1;
+  --gy-success-fg: #0b5d2a;
+  --gy-success-bg: #dff3e4;
+  --gy-warning-fg: #7a4a00;
+  --gy-warning-bg: #fdecc8;
+  --gy-danger-fg: #9c1c1c;
+  --gy-danger-bg: #fbe1e1;
+  --gy-info-fg: #0b4f8a;
+  --gy-info-bg: #dcecfb;
+}
+
+body {
+  margin: 0;
+  font-family: fonts.$font-stack;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+}

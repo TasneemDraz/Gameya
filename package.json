@@ -1,0 +1,17 @@
+{
+  "name": "gameya-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Repository tooling only (git hooks, commit linting). Application code lives in src/.",
+  "scripts": {
+    "prepare": "husky",
+    "check:i18n": "node tools/check-i18n.mjs"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.0.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.0.0",
+    "prettier": "^3.8.1"
+  }
+}

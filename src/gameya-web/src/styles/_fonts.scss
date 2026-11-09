@@ -1,0 +1,6 @@
+// The font files are loaded by the Google Fonts <link> in index.html.
+$font-arabic: 'IBM Plex Sans Arabic', 'Segoe UI', 'Tahoma', sans-serif;
+$font-latin: 'IBM Plex Sans', 'Segoe UI', 'Roboto', sans-serif;
+
+// Arabic first: Latin text falls through to IBM Plex Sans.
+$font-stack: $font-arabic, $font-latin;

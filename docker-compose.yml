@@ -1,0 +1,62 @@
+# Local stack: docker compose up --build -d   (API on http://localhost:8080, Mailpit UI on http://localhost:8025)
+# The sa password below is a dev-only value; nothing here is for production.
+x-logging: &json-file-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Gameya-dev-Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    logging: *json-file-logging
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    logging: *json-file-logging
+
+  api:
+    image: gameya-api:dev
+    build:
+      context: .
+      dockerfile: src/Gameya.Api/Dockerfile
+    # Applies EF migrations (EF creates the database), then keeps serving. The flag is refused outside Development.
+    command: ["--migrate"]
+    depends_on:
+      mssql:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__App: Server=mssql;Database=gameya;User Id=sa;Password=Gameya-dev-Passw0rd;TrustServerCertificate=True
+      ConnectionStrings__Migrator: Server=mssql;Database=gameya;User Id=sa;Password=Gameya-dev-Passw0rd;TrustServerCertificate=True
+      Email__Smtp__Host: mailpit
+      Email__Smtp__Port: "1025"
+      Sms__Provider: Logging
+      Storage__RootPath: /data/files
+    ports:
+      - "8080:8080"
+    volumes:
+      - files:/data/files
+    logging: *json-file-logging
+
+volumes:
+  mssqldata:
+  files:

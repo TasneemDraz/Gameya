@@ -1,0 +1,27 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: 0.875rem;
+}
+
+input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding: 12px;
+  font: inherit;
+  font-size: 1.125rem;
+  letter-spacing: 0.05em;
+  text-align: start;
+  border: 1px solid currentcolor;
+  border-radius: 8px;
+}
+
+.error {
+  margin-block: 4px 0;
+  color: #b3261e;
+  font-size: 0.875rem;
+}

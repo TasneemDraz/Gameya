@@ -1,0 +1,260 @@
+name: Deploy
+
+# push to main -> staging; push of a release tag (v1.2.3) -> production (GitHub Environment with a required reviewer).
+# workflow_dispatch redeploys any tag or sha (rollback): a release tag (v1.2.3) goes to production, anything else to staging.
+# Target: MonsterASP.NET over WebDeploy. Secrets are per GitHub Environment; see docs/deployment.md.
+on:
+  push:
+    branches: [main]
+    # Release tags only (v1.2.3); a stray tag such as "v-test" or "vnext" never starts a production deploy.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit sha to deploy (rollback). A release tag (v1.2.3) deploys to production, anything else to staging.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  # Expressions have no regex, so the target is decided here: only an exact release tag (v1.2.3) is production.
+  route:
+    name: route
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      aspnetcore: ${{ steps.pick.outputs.aspnetcore }}
+    steps:
+      - id: pick
+        env:
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+            echo "aspnetcore=Production" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
+            echo "aspnetcore=Staging" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Deploying $REF"
+
+  deploy:
+    name: deploy
+    needs: route
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: ${{ needs.route.outputs.environment }}
+    concurrency:
+      group: deploy-${{ needs.route.outputs.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Check required secrets (before anything touches the database)
+        env:
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          SECURITY_HASH_KEY: ${{ secrets.SECURITY_HASH_KEY }}
+          STORAGE_URL_SIGNING_KEY: ${{ secrets.STORAGE_URL_SIGNING_KEY }}
+          WEBDEPLOY_SERVER: ${{ secrets.WEBDEPLOY_SERVER }}
+          WEBDEPLOY_SITE: ${{ secrets.WEBDEPLOY_SITE }}
+          WEBDEPLOY_USERNAME: ${{ secrets.WEBDEPLOY_USERNAME }}
+          WEBDEPLOY_PASSWORD: ${{ secrets.WEBDEPLOY_PASSWORD }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          B2_S3_ENDPOINT: ${{ secrets.B2_S3_ENDPOINT }}
+          B2_FILES_BUCKET: ${{ secrets.B2_FILES_BUCKET }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
+          B2_REGION: ${{ secrets.B2_REGION }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMS_PROVIDER: ${{ secrets.SMS_PROVIDER }}
+          SMSGATE_USERNAME: ${{ secrets.SMSGATE_USERNAME }}
+          SMSGATE_PASSWORD: ${{ secrets.SMSGATE_PASSWORD }}
+        run: |
+          $names = 'DB_CONNECTION_STRING', 'JWT_SIGNING_KEY', 'SECURITY_HASH_KEY', 'STORAGE_URL_SIGNING_KEY',
+            'WEBDEPLOY_SERVER', 'WEBDEPLOY_SITE', 'WEBDEPLOY_USERNAME', 'WEBDEPLOY_PASSWORD', 'SITE_URL',
+            'B2_S3_ENDPOINT', 'B2_FILES_BUCKET', 'B2_KEY_ID', 'B2_APP_KEY', 'B2_REGION',
+            'EMAIL_FROM', 'SMTP_USERNAME', 'SMTP_PASSWORD'
+          # SmsGate is the default provider; its credentials are required unless another provider is chosen.
+          if ([string]::IsNullOrWhiteSpace($env:SMS_PROVIDER) -or $env:SMS_PROVIDER -ceq 'SmsGate') {
+            $names += 'SMSGATE_USERNAME', 'SMSGATE_PASSWORD'
+          }
+          $bad = $false
+          # Staging and Production only support SmsGate.
+          if (-not [string]::IsNullOrWhiteSpace($env:SMS_PROVIDER) -and $env:SMS_PROVIDER -cne 'SmsGate') {
+            Write-Host "::error::SMS_PROVIDER must be exactly SmsGate (or unset) for Staging and Production"
+            $bad = $true
+          }
+          foreach ($name in $names) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              Write-Host "::error::required secret $name is empty or not set"
+              $bad = $true
+            }
+          }
+          if ($bad) { exit 1 }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/gameya-web/package-lock.json
+
+      - name: Domain tests (Africa/Cairo must resolve on Windows)
+        run: dotnet test tests/Gameya.Domain.Tests
+
+      - name: Build the self-contained win-x64 migrations bundle
+        # The design-time factory requires a connection string even to build; this one is never used to connect.
+        env:
+          ConnectionStrings__Migrator: Server=build-placeholder;Database=gameya
+        run: |
+          dotnet tool restore
+          if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed" }
+          dotnet ef migrations bundle -p src/Gameya.Infrastructure -s src/Gameya.Infrastructure -r win-x64 --self-contained -o efbundle.exe --force
+          if ($LASTEXITCODE -ne 0) { throw "efbundle build failed" }
+
+      - name: Run the migrations
+        env:
+          ConnectionStrings__Migrator: ${{ secrets.DB_CONNECTION_STRING }}
+        run: |
+          ./efbundle.exe
+          if ($LASTEXITCODE -ne 0) { throw "migrations failed with exit code $LASTEXITCODE" }
+
+      - name: Install web dependencies
+        working-directory: src/gameya-web
+        run: npm ci
+
+      - name: Publish the site
+        run: ./tools/publish-site.ps1 -OutDir site
+
+      - name: Write secrets.json and set the environment name
+        env:
+          DEPLOY_ASPNETCORE_ENVIRONMENT: ${{ needs.route.outputs.aspnetcore }}
+          ConnectionStrings__App: ${{ secrets.DB_CONNECTION_STRING }}
+          ConnectionStrings__Migrator: ${{ secrets.DB_CONNECTION_STRING }}
+          Jwt__Issuer: gameya
+          Jwt__Audience: gameya
+          Jwt__SigningKey: ${{ secrets.JWT_SIGNING_KEY }}
+          Security__HashKey: ${{ secrets.SECURITY_HASH_KEY }}
+          Storage__UrlSigningKey: ${{ secrets.STORAGE_URL_SIGNING_KEY }}
+          Storage__Provider: S3
+          Storage__S3__ServiceUrl: ${{ secrets.B2_S3_ENDPOINT }}
+          Storage__S3__Bucket: ${{ secrets.B2_FILES_BUCKET }}
+          Storage__S3__AccessKeyId: ${{ secrets.B2_KEY_ID }}
+          Storage__S3__SecretAccessKey: ${{ secrets.B2_APP_KEY }}
+          Storage__S3__Region: ${{ secrets.B2_REGION }}
+          Email__Smtp__Host: ${{ secrets.SMTP_HOST || 'smtp-relay.brevo.com' }}
+          Email__Smtp__Port: ${{ secrets.SMTP_PORT || '587' }}
+          Email__Smtp__Username: ${{ secrets.SMTP_USERNAME }}
+          Email__Smtp__Password: ${{ secrets.SMTP_PASSWORD }}
+          Email__Smtp__UseStartTls: 'true'
+          Email__From: ${{ secrets.EMAIL_FROM }}
+          Sms__Provider: ${{ secrets.SMS_PROVIDER || 'SmsGate' }}
+          Sms__SmsGate__BaseUrl: ${{ secrets.SMSGATE_BASE_URL || 'https://api.sms-gate.app/3rdparty/v1' }}
+          Sms__SmsGate__Username: ${{ secrets.SMSGATE_USERNAME }}
+          Sms__SmsGate__Password: ${{ secrets.SMSGATE_PASSWORD }}
+          MediatR__LicenseKey: ${{ secrets.MEDIATR_LICENSE_KEY }}
+          App__WebBaseUrl: ${{ secrets.SITE_URL }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          ForwardedHeaders__KnownNetworks__0: ${{ secrets.FORWARDED_KNOWN_NETWORK }}
+          Observability__LogFilePath: logs/gameya-.json
+        run: |
+          node tools/write-secrets.mjs site/secrets.json
+          if ($LASTEXITCODE -ne 0) { throw "write-secrets failed" }
+
+          # The environment name must be known before configuration loads, so it lives in web.config, not secrets.json.
+          $path = (Resolve-Path site/web.config).Path
+          $xml = [xml](Get-Content -Raw -LiteralPath $path)
+          $aspNetCore = $xml.SelectSingleNode('//aspNetCore')
+          if ($null -eq $aspNetCore) { throw "web.config has no <aspNetCore> element" }
+          $envVars = $aspNetCore.SelectSingleNode('environmentVariables')
+          if ($null -eq $envVars) {
+            $envVars = $xml.CreateElement('environmentVariables')
+            [void]$aspNetCore.AppendChild($envVars)
+          }
+          $var = $xml.CreateElement('environmentVariable')
+          $var.SetAttribute('name', 'ASPNETCORE_ENVIRONMENT')
+          $var.SetAttribute('value', $env:DEPLOY_ASPNETCORE_ENVIRONMENT)
+          [void]$envVars.AppendChild($var)
+          $xml.Save($path)
+
+      - name: Install Web Deploy
+        run: |
+          choco install webdeploy -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco install webdeploy failed" }
+
+      - name: Sync the site with Web Deploy
+        env:
+          WEBDEPLOY_SERVER: ${{ secrets.WEBDEPLOY_SERVER }}
+          WEBDEPLOY_SITE: ${{ secrets.WEBDEPLOY_SITE }}
+          WEBDEPLOY_USERNAME: ${{ secrets.WEBDEPLOY_USERNAME }}
+          WEBDEPLOY_PASSWORD: ${{ secrets.WEBDEPLOY_PASSWORD }}
+        run: |
+          $msdeploy = Join-Path ${env:ProgramFiles} 'IIS\Microsoft Web Deploy V3\msdeploy.exe'
+          if (-not (Test-Path $msdeploy)) { throw "msdeploy.exe not found at $msdeploy" }
+          $source = (Resolve-Path site).Path
+          $site = $env:WEBDEPLOY_SITE
+          # The password is read from the environment here and is never written to the log.
+          $dest = "contentPath=$site,computerName=https://$($env:WEBDEPLOY_SERVER):8172/msdeploy.axd?site=$site,userName=$($env:WEBDEPLOY_USERNAME),password=$($env:WEBDEPLOY_PASSWORD),authType=Basic"
+          & $msdeploy -verb:sync "-source:contentPath=$source" "-dest:$dest" `
+            -enableRule:AppOffline -enableRule:DoNotDeleteRule '-skip:Directory=\\logs$' -allowUntrusted
+          if ($LASTEXITCODE -ne 0) { throw "msdeploy failed with exit code $LASTEXITCODE" }
+
+      - name: Wait for /health to report Healthy
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          $url = $env:SITE_URL.TrimEnd('/') + '/health'
+          $deadline = (Get-Date).AddMinutes(5)
+          while ($true) {
+            $status = 'unreachable'
+            try {
+              $response = Invoke-WebRequest -Uri $url -SkipHttpErrorCheck -TimeoutSec 20
+              $status = ($response.Content | ConvertFrom-Json).status
+            }
+            catch {
+              $status = 'unreachable'
+            }
+            Write-Host "$(Get-Date -Format o) $url -> $status"
+            if ($status -ceq 'Healthy') { break }
+            if ((Get-Date) -ge $deadline) { throw "$url did not report Healthy within 5 minutes (last: $status)" }
+            Start-Sleep -Seconds 10
+          }
+
+      # Expressions have no replace(); a ref such as refs/tags/v1.2 or a branch name is made safe for an artifact name here.
+      - name: Name the artifact
+        id: artifact
+        env:
+          REF: ${{ inputs.ref || github.sha }}
+        run: |
+          $safe = $env:REF -replace '[/\\:<>|*?"]', '-'
+          "name=site-$safe" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload the site (without secrets.json)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          # A repeated rollback to the same ref reuses the name.
+          overwrite: true
+          path: |
+            site/
+            !site/secrets.json
+          retention-days: 30
