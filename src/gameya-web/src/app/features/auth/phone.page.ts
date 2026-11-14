@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { AuthApi } from '../../core/auth/auth.api';
 import { problemOf } from '../../core/auth/error.interceptor';
+import { safeReturnUrl } from '../../core/auth/return-url';
 import { LanguageService } from '../../core/i18n/language.service';
 import { PhoneInput } from '../../shared/phone-input';
 
@@ -36,6 +37,7 @@ import { PhoneInput } from '../../shared/phone-input';
 export class PhonePage {
   private readonly api = inject(AuthApi);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly lang = inject(LanguageService);
 
   protected readonly phone = new FormControl('', {
@@ -50,10 +52,12 @@ export class PhonePage {
     this.busy.set(true);
     this.error.set(null);
     const phone = this.phone.value;
+    const returnUrl = safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
     this.api.requestOtp(phone, this.lang.current()).subscribe({
       next: (r) =>
         void this.router.navigate(['/login/code'], {
           state: { phone, resendAvailableAt: r.resendAvailableAt },
+          queryParams: returnUrl ? { returnUrl } : undefined,
         }),
       error: (err: unknown) => {
         this.busy.set(false);

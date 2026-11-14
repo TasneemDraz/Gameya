@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { AuthApi } from '../../core/auth/auth.api';
 import { AuthStore } from '../../core/auth/auth.store';
 import { problemOf } from '../../core/auth/error.interceptor';
+import { safeReturnUrl } from '../../core/auth/return-url';
 import { LanguageService } from '../../core/i18n/language.service';
 
 @Component({
@@ -43,6 +44,9 @@ export class NameSetupPage {
   private readonly api = inject(AuthApi);
   private readonly store = inject(AuthStore);
   private readonly router = inject(Router);
+  private readonly returnUrl = safeReturnUrl(
+    inject(ActivatedRoute).snapshot.queryParamMap.get('returnUrl'),
+  );
   private readonly lang = inject(LanguageService);
 
   protected readonly name = new FormControl('', {
@@ -59,7 +63,7 @@ export class NameSetupPage {
     this.api.updateProfile(this.name.value.trim(), this.lang.current()).subscribe({
       next: () => {
         this.store.markProfileComplete();
-        void this.router.navigateByUrl('/profile');
+        void this.router.navigateByUrl(this.returnUrl ?? '/gameyas');
       },
       error: (err: unknown) => {
         this.busy.set(false);

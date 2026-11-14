@@ -1,0 +1,16 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  textarea {
+    inline-size: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    font: inherit;
+  }
+}
+
+.error {
+  color: var(--gy-danger-fg);
+}

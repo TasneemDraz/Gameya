@@ -7,13 +7,14 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 import { AuthApi } from '../../core/auth/auth.api';
 import { AuthStore, Session } from '../../core/auth/auth.store';
 import { problemOf } from '../../core/auth/error.interceptor';
+import { safeReturnUrl } from '../../core/auth/return-url';
 import { CairoDatePipe } from '../../core/format/cairo-date.pipe';
 import { LanguageService } from '../../core/i18n/language.service';
 import { OtpInput } from '../../shared/otp-input';
@@ -61,6 +62,9 @@ export class OtpPage {
   private readonly api = inject(AuthApi);
   private readonly store = inject(AuthStore);
   private readonly router = inject(Router);
+  private readonly returnUrl = safeReturnUrl(
+    inject(ActivatedRoute).snapshot.queryParamMap.get('returnUrl'),
+  );
   private readonly lang = inject(LanguageService);
   private readonly transloco = inject(TranslocoService);
   private readonly cairo = inject(CairoDatePipe);
@@ -120,7 +124,8 @@ export class OtpPage {
   }
 
   protected changeNumber(): void {
-    void this.router.navigateByUrl('/login');
+    const query = this.returnUrl ? `?returnUrl=${encodeURIComponent(this.returnUrl)}` : '';
+    void this.router.navigateByUrl(`/login${query}`);
   }
 
   private async signedIn(session: Session): Promise<void> {
@@ -132,7 +137,12 @@ export class OtpPage {
         /* keep the current language */
       }
     }
-    await this.router.navigateByUrl(session.profileComplete ? '/profile' : '/welcome/name');
+    if (session.profileComplete) {
+      await this.router.navigateByUrl(this.returnUrl ?? '/gameyas');
+    } else {
+      const query = this.returnUrl ? `?returnUrl=${encodeURIComponent(this.returnUrl)}` : '';
+      await this.router.navigateByUrl(`/welcome/name${query}`);
+    }
   }
 
   private describe(err: unknown): string | null {

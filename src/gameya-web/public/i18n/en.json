@@ -57,7 +57,21 @@
     "CONCURRENCY_CONFLICT": "This was changed elsewhere. Refresh the page and try again.",
     "SMS_SEND_FAILED": "Couldn't send the message. Try again shortly.",
     "INTERNAL": "Something went wrong. Please try again.",
-    "INVALID_LANGUAGE": "This language is not supported."
+    "INVALID_LANGUAGE": "This language is not supported.",
+    "GAMEYA_NOT_FOUND": "We could not find this Gam'eya.",
+    "INVALID_STATUS_TRANSITION": "This is not possible at the Gam'eya's current stage.",
+    "NOT_ENOUGH_SHARES": "Not enough shares are left. Available: {{available}}.",
+    "MAX_SHARES_EXCEEDED": "You cannot hold more than the maximum shares per member.",
+    "SHARES_BELOW_ASSIGNED": "The share count cannot be lower than the shares already taken or reserved.",
+    "TERMS_NOT_ACCEPTED": "You must accept the rules and the no-money notice first.",
+    "INVITE_CODE_INVALID": "This invite link is not valid.",
+    "GAMEYA_FULL": "This Gam'eya is full.",
+    "ALREADY_MEMBER": "You are already a member of this Gam'eya.",
+    "REQUEST_ALREADY_PENDING": "You already have a pending request to join.",
+    "INVITE_NOT_FOUND": "This invite is no longer available.",
+    "ORGANIZER_CANNOT_LEAVE": "The organizer cannot leave. Cancel the Gam'eya instead.",
+    "START_DATE_IN_PAST": "The start date cannot be in the past.",
+    "INVALID_PREFERENCES": "The preferred turns are not valid."
   },
   "landing": {
     "title": "Your savings circle with family and friends, no mix-ups",
@@ -119,5 +133,215 @@
     "verifying": "Verifying your email…",
     "success": "Your email has been verified",
     "goProfile": "Go to my account"
+  },
+  "gameyaStatus": {
+    "Draft": "Draft",
+    "Recruiting": "Recruiting members",
+    "Active": "Active",
+    "Completed": "Completed",
+    "Cancelled": "Cancelled"
+  },
+  "reason": {
+    "label": "Reason",
+    "tooShort": "Please write at least {{min}} characters."
+  },
+  "activity": {
+    "title": "Activity",
+    "empty": "Nothing has happened yet.",
+    "more": "Show more",
+    "system": "System",
+    "actions": {
+      "GAMEYA_CREATED": "Created the Gam'eya",
+      "GAMEYA_SETTINGS_CHANGED": "Changed the Gam'eya settings",
+      "GAMEYA_OPENED": "Opened the Gam'eya for members",
+      "INVITE_CODE_REGENERATED": "Created a new invite link",
+      "GAMEYA_CANCELLED": "Cancelled the Gam'eya",
+      "JOIN_REQUESTED": "Asked to join",
+      "JOIN_REQUEST_WITHDRAWN": "Withdrew the request to join",
+      "JOIN_REQUEST_APPROVED": "Approved a request to join",
+      "JOIN_REQUEST_REJECTED": "Declined a request to join",
+      "MEMBER_INVITED": "Invited a member",
+      "INVITE_REVOKED": "Cancelled an invite",
+      "INVITE_ACCEPTED": "Accepted an invite",
+      "INVITE_DECLINED": "Declined an invite",
+      "TERMS_REACCEPTED": "Accepted the updated terms",
+      "MEMBER_LEFT": "Left the Gam'eya",
+      "MEMBER_REMOVED": "Removed a member"
+    }
+  },
+  "gameyas": {
+    "title": "My Gam'eyas",
+    "create": "Create a Gam'eya",
+    "organizer": "Organizer",
+    "needsReaccept": "Needs your approval of new terms",
+    "groups": {
+      "Draft": "Drafts",
+      "Recruiting": "Recruiting members",
+      "Active": "Active",
+      "Completed": "Completed",
+      "Cancelled": "Cancelled"
+    },
+    "amountTimesShares": "{{amount}} x {{shares}} shares",
+    "myShares": "Your shares: {{count}}",
+    "empty": {
+      "title": "You are not in any Gam'eya yet",
+      "body": "A Gam'eya is a savings circle: a group pays the same amount each period and each member takes the full pot in turn. Create one or join through an invite link."
+    },
+    "invites": {
+      "title": "Invitations",
+      "from": "From {{name}}",
+      "accept": "Accept",
+      "decline": "Decline",
+      "shares": "{{count}} shares offered"
+    },
+    "weekday": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "frequency": {
+      "Monthly": "Monthly",
+      "Weekly": "Weekly"
+    },
+    "payoutTiming": {
+      "AfterFullCollection": "After everyone has paid",
+      "FixedDate": "On a fixed day"
+    },
+    "orderMethod": {
+      "Manual": "Chosen by the organizer",
+      "RandomDraw": "Random draw",
+      "ByRequest": "By member request"
+    },
+    "form": {
+      "createTitle": "Create a Gam'eya",
+      "editTitle": "Edit the Gam'eya",
+      "basics": "Basics",
+      "money": "Money and schedule",
+      "payout": "Payout",
+      "members": "Members",
+      "rules": "Rules",
+      "name": "Name",
+      "description": "Description (optional)",
+      "amount": "Contribution per share",
+      "shareCount": "Number of shares",
+      "frequency": "How often",
+      "startDate": "First due date",
+      "dueDay": {
+        "monthly": "Due on day {{day}} of each month",
+        "weekly": "Due every {{weekday}}"
+      },
+      "graceDays": "Grace days",
+      "payoutTiming": "Payout timing",
+      "payoutOffsetDays": "Days after the due date",
+      "orderMethod": "Turn order",
+      "maxSharesPerMember": "Maximum shares per member",
+      "organizerParticipates": "I will take part as a member",
+      "organizerShares": "My shares",
+      "rulesText": "Rules for members (optional)",
+      "calc": {
+        "pot": "Pot",
+        "rounds": "Rounds",
+        "endDate": "Last due date",
+        "totalPerShare": "Total paid per share"
+      },
+      "save": "Save",
+      "reacceptTitle": "Members must accept again",
+      "reacceptMessage": "{{count}} member(s) will be asked to accept the new terms. Continue?",
+      "errors": {
+        "required": "This field is required.",
+        "min": "The value is too small.",
+        "max": "The value is too large.",
+        "minlength": "This is too short.",
+        "maxlength": "This is too long."
+      }
+    },
+    "page": {
+      "overview": "Overview",
+      "members": "Members",
+      "rules": "Rules",
+      "activity": "Activity",
+      "manage": "Manage",
+      "pot": "Pot",
+      "rounds": "Rounds",
+      "perShare": "Per share",
+      "start": "Starts",
+      "end": "Ends",
+      "availableShares": "Shares available: {{count}}",
+      "leave": "Leave",
+      "leaveTitle": "Leave this Gam'eya?",
+      "leaveMessage": "You will no longer be a member.",
+      "reacceptBanner": "The terms changed: the contribution was {{oldAmount}}, now {{newAmount}}. Please accept to stay.",
+      "reacceptBannerGeneric": "The terms of this Gam'eya changed. Please accept to stay.",
+      "reaccept": "Accept the new terms",
+      "organizerBadge": "Organizer",
+      "shares": "{{count}} shares",
+      "deletedUser": "Deleted user",
+      "noMoneyNotice": "The app never holds or moves money. All payments happen directly between you; the app only records and confirms them."
+    },
+    "manage": {
+      "inviteLink": "Invite link",
+      "copy": "Copy link",
+      "copied": "Link copied",
+      "whatsapp": "Share on WhatsApp",
+      "whatsappMessage": "You are invited to join the Gam'eya \"{{name}}\": {{link}}",
+      "regenerate": "New link",
+      "regenerateTitle": "Create a new link?",
+      "regenerateMessage": "The old link will stop working.",
+      "open": "Open for members",
+      "openTitle": "Open for members?",
+      "openMessage": "You will get an invite link to share.",
+      "cancel": "Cancel the Gam'eya",
+      "cancelTitle": "Cancel this Gam'eya?",
+      "cancelReason": "Reason (optional)",
+      "requests": "Join requests",
+      "approve": "Approve",
+      "reject": "Decline",
+      "rejectTitle": "Decline this request?",
+      "requestShares": "Shares requested: {{count}}",
+      "termsStale": "Needs to accept the new terms first",
+      "invites": "Direct invites",
+      "invitePhone": "Mobile number",
+      "inviteShares": "Shares",
+      "invite": "Invite",
+      "revoke": "Cancel invite",
+      "removeMember": "Remove",
+      "removeTitle": "Remove this member?",
+      "removeReason": "Reason (at least 5 characters)",
+      "none": "Nothing here yet"
+    }
+  },
+  "invite": {
+    "title": "You are invited",
+    "organizer": "Organized by {{name}}",
+    "available": "Shares available: {{count}}",
+    "login": "Log in to join",
+    "full": "This Gam'eya is full",
+    "fullBody": "There are no shares left. Ask the organizer if a place opens up.",
+    "cancelled": "This Gam'eya was cancelled",
+    "cancelledBody": "The organizer cancelled it, so it is no longer accepting members.",
+    "invalid": "This invite link is not valid",
+    "invalidBody": "Check the link with the person who sent it.",
+    "member": "You are already in this Gam'eya",
+    "organizerOwn": "This is your Gam'eya",
+    "open": "Go to the Gam'eya",
+    "pending": "Your request is waiting for the organizer",
+    "withdraw": "Withdraw request",
+    "reaccept": "Accept the updated terms",
+    "rulesTitle": "Rules",
+    "join": {
+      "shares": "Number of shares",
+      "preferences": "Preferred turns (up to 3)",
+      "noPreference": "No preference",
+      "round": "Turn {{n}}",
+      "acceptRules": "I have read and accept the rules",
+      "acceptNoMoney": "I understand the app never holds or moves money",
+      "submit": "Send request",
+      "submitted": "Your request was sent",
+      "accept": "Accept the invite"
+    }
   }
 }

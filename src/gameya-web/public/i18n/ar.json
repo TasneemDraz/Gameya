@@ -57,7 +57,21 @@
     "CONCURRENCY_CONFLICT": "تم تعديل البيانات من مكان آخر. حدّث الصفحة وحاول مرة أخرى.",
     "SMS_SEND_FAILED": "تعذّر إرسال الرسالة. حاول مرة أخرى بعد قليل.",
     "INTERNAL": "حدث خطأ غير متوقع. حاول مرة أخرى.",
-    "INVALID_LANGUAGE": "اللغة غير مدعومة."
+    "INVALID_LANGUAGE": "اللغة غير مدعومة.",
+    "GAMEYA_NOT_FOUND": "لم نعثر على هذه الجمعية.",
+    "INVALID_STATUS_TRANSITION": "هذا غير ممكن في المرحلة الحالية من الجمعية.",
+    "NOT_ENOUGH_SHARES": "لا توجد أسهم كافية. المتاح: {{available}}.",
+    "MAX_SHARES_EXCEEDED": "لا يمكنك حيازة أكثر من الحد الأقصى للأسهم لكل عضو.",
+    "SHARES_BELOW_ASSIGNED": "لا يمكن أن يقل عدد الأسهم عن الأسهم المحجوزة أو المخصصة بالفعل.",
+    "TERMS_NOT_ACCEPTED": "يجب أن توافق على القواعد وتنبيه عدم التعامل بالمال أولاً.",
+    "INVITE_CODE_INVALID": "رابط الدعوة هذا غير صالح.",
+    "GAMEYA_FULL": "هذه الجمعية مكتملة.",
+    "ALREADY_MEMBER": "أنت عضو بالفعل في هذه الجمعية.",
+    "REQUEST_ALREADY_PENDING": "لديك بالفعل طلب انضمام قيد الانتظار.",
+    "INVITE_NOT_FOUND": "هذه الدعوة لم تعد متاحة.",
+    "ORGANIZER_CANNOT_LEAVE": "لا يمكن للمنظم المغادرة. ألغِ الجمعية بدلاً من ذلك.",
+    "START_DATE_IN_PAST": "لا يمكن أن يكون تاريخ البدء في الماضي.",
+    "INVALID_PREFERENCES": "الأدوار المفضلة غير صالحة."
   },
   "landing": {
     "title": "جمعيتك مع أهلك وصحابك، بدون لخبطة",
@@ -119,5 +133,215 @@
     "verifying": "جارٍ التحقق من بريدك…",
     "success": "تم التحقق من بريدك الإلكتروني",
     "goProfile": "الذهاب إلى حسابي"
+  },
+  "gameyaStatus": {
+    "Draft": "مسودة",
+    "Recruiting": "تستقبل أعضاء",
+    "Active": "جارية",
+    "Completed": "مكتملة",
+    "Cancelled": "ملغاة"
+  },
+  "reason": {
+    "label": "السبب",
+    "tooShort": "اكتب {{min}} أحرف على الأقل."
+  },
+  "activity": {
+    "title": "النشاط",
+    "empty": "لم يحدث شيء بعد.",
+    "more": "عرض المزيد",
+    "system": "النظام",
+    "actions": {
+      "GAMEYA_CREATED": "أنشأ الجمعية",
+      "GAMEYA_SETTINGS_CHANGED": "غيّر إعدادات الجمعية",
+      "GAMEYA_OPENED": "فتح الجمعية للأعضاء",
+      "INVITE_CODE_REGENERATED": "أنشأ رابط دعوة جديداً",
+      "GAMEYA_CANCELLED": "ألغى الجمعية",
+      "JOIN_REQUESTED": "طلب الانضمام",
+      "JOIN_REQUEST_WITHDRAWN": "سحب طلب الانضمام",
+      "JOIN_REQUEST_APPROVED": "وافق على طلب انضمام",
+      "JOIN_REQUEST_REJECTED": "رفض طلب انضمام",
+      "MEMBER_INVITED": "دعا عضواً",
+      "INVITE_REVOKED": "ألغى دعوة",
+      "INVITE_ACCEPTED": "قبل دعوة",
+      "INVITE_DECLINED": "رفض دعوة",
+      "TERMS_REACCEPTED": "وافق على الشروط المحدّثة",
+      "MEMBER_LEFT": "غادر الجمعية",
+      "MEMBER_REMOVED": "أزال عضواً"
+    }
+  },
+  "gameyas": {
+    "title": "جمعياتي",
+    "create": "إنشاء جمعية",
+    "organizer": "المنظم",
+    "needsReaccept": "تحتاج موافقتك على الشروط الجديدة",
+    "groups": {
+      "Draft": "المسودات",
+      "Recruiting": "تستقبل أعضاء",
+      "Active": "الجارية",
+      "Completed": "المكتملة",
+      "Cancelled": "الملغاة"
+    },
+    "amountTimesShares": "{{amount}} × {{shares}} أسهم",
+    "myShares": "أسهمك: {{count}}",
+    "empty": {
+      "title": "لست في أي جمعية بعد",
+      "body": "الجمعية دائرة ادخار: تدفع المجموعة المبلغ نفسه كل فترة، ويأخذ كل عضو المبلغ الكامل بدوره. أنشئ جمعية أو انضم عبر رابط دعوة."
+    },
+    "invites": {
+      "title": "الدعوات",
+      "from": "من {{name}}",
+      "accept": "قبول",
+      "decline": "رفض",
+      "shares": "{{count}} أسهم معروضة"
+    },
+    "weekday": {
+      "0": "الأحد",
+      "1": "الاثنين",
+      "2": "الثلاثاء",
+      "3": "الأربعاء",
+      "4": "الخميس",
+      "5": "الجمعة",
+      "6": "السبت"
+    },
+    "frequency": {
+      "Monthly": "شهرياً",
+      "Weekly": "أسبوعياً"
+    },
+    "payoutTiming": {
+      "AfterFullCollection": "بعد دفع الجميع",
+      "FixedDate": "في يوم ثابت"
+    },
+    "orderMethod": {
+      "Manual": "يحدده المنظم",
+      "RandomDraw": "قرعة عشوائية",
+      "ByRequest": "حسب طلب الأعضاء"
+    },
+    "form": {
+      "createTitle": "إنشاء جمعية",
+      "editTitle": "تعديل الجمعية",
+      "basics": "الأساسيات",
+      "money": "المبلغ والجدول",
+      "payout": "الصرف",
+      "members": "الأعضاء",
+      "rules": "القواعد",
+      "name": "الاسم",
+      "description": "الوصف (اختياري)",
+      "amount": "المساهمة لكل سهم",
+      "shareCount": "عدد الأسهم",
+      "frequency": "كل كم",
+      "startDate": "أول موعد استحقاق",
+      "dueDay": {
+        "monthly": "الاستحقاق يوم {{day}} من كل شهر",
+        "weekly": "الاستحقاق كل {{weekday}}"
+      },
+      "graceDays": "أيام السماح",
+      "payoutTiming": "موعد الصرف",
+      "payoutOffsetDays": "عدد الأيام بعد الاستحقاق",
+      "orderMethod": "ترتيب الأدوار",
+      "maxSharesPerMember": "الحد الأقصى للأسهم لكل عضو",
+      "organizerParticipates": "سأشارك كعضو",
+      "organizerShares": "أسهمي",
+      "rulesText": "قواعد للأعضاء (اختياري)",
+      "calc": {
+        "pot": "المبلغ الكامل",
+        "rounds": "عدد الأدوار",
+        "endDate": "آخر موعد استحقاق",
+        "totalPerShare": "إجمالي المدفوع لكل سهم"
+      },
+      "save": "حفظ",
+      "reacceptTitle": "سيُطلب من الأعضاء الموافقة مجدداً",
+      "reacceptMessage": "سيُطلب من {{count}} عضو الموافقة على الشروط الجديدة. هل تريد المتابعة؟",
+      "errors": {
+        "required": "هذا الحقل مطلوب.",
+        "min": "القيمة صغيرة جداً.",
+        "max": "القيمة كبيرة جداً.",
+        "minlength": "النص قصير جداً.",
+        "maxlength": "النص طويل جداً."
+      }
+    },
+    "page": {
+      "overview": "نظرة عامة",
+      "members": "الأعضاء",
+      "rules": "القواعد",
+      "activity": "النشاط",
+      "manage": "الإدارة",
+      "pot": "المبلغ الكامل",
+      "rounds": "الأدوار",
+      "perShare": "لكل سهم",
+      "start": "البداية",
+      "end": "النهاية",
+      "availableShares": "الأسهم المتاحة: {{count}}",
+      "leave": "مغادرة",
+      "leaveTitle": "مغادرة هذه الجمعية؟",
+      "leaveMessage": "لن تكون عضواً بعد الآن.",
+      "reacceptBanner": "تغيرت الشروط: كانت المساهمة {{oldAmount}} وأصبحت {{newAmount}}. وافق للبقاء.",
+      "reacceptBannerGeneric": "تغيرت شروط هذه الجمعية. وافق للبقاء.",
+      "reaccept": "الموافقة على الشروط الجديدة",
+      "organizerBadge": "المنظم",
+      "shares": "{{count}} أسهم",
+      "deletedUser": "مستخدم محذوف",
+      "noMoneyNotice": "التطبيق لا يحتفظ بالأموال ولا ينقلها أبداً. كل المدفوعات تتم مباشرة بينكم؛ التطبيق يسجلها ويؤكدها فقط."
+    },
+    "manage": {
+      "inviteLink": "رابط الدعوة",
+      "copy": "نسخ الرابط",
+      "copied": "تم نسخ الرابط",
+      "whatsapp": "مشاركة عبر واتساب",
+      "whatsappMessage": "أنت مدعو للانضمام إلى الجمعية \"{{name}}\": {{link}}",
+      "regenerate": "رابط جديد",
+      "regenerateTitle": "إنشاء رابط جديد؟",
+      "regenerateMessage": "سيتوقف الرابط القديم عن العمل.",
+      "open": "فتح للأعضاء",
+      "openTitle": "فتح الجمعية للأعضاء؟",
+      "openMessage": "ستحصل على رابط دعوة لمشاركته.",
+      "cancel": "إلغاء الجمعية",
+      "cancelTitle": "إلغاء هذه الجمعية؟",
+      "cancelReason": "السبب (اختياري)",
+      "requests": "طلبات الانضمام",
+      "approve": "قبول",
+      "reject": "رفض",
+      "rejectTitle": "رفض هذا الطلب؟",
+      "requestShares": "الأسهم المطلوبة: {{count}}",
+      "termsStale": "يجب أن يوافق على الشروط الجديدة أولاً",
+      "invites": "الدعوات المباشرة",
+      "invitePhone": "رقم الموبايل",
+      "inviteShares": "الأسهم",
+      "invite": "دعوة",
+      "revoke": "إلغاء الدعوة",
+      "removeMember": "إزالة",
+      "removeTitle": "إزالة هذا العضو؟",
+      "removeReason": "السبب (5 أحرف على الأقل)",
+      "none": "لا شيء هنا بعد"
+    }
+  },
+  "invite": {
+    "title": "أنت مدعو",
+    "organizer": "ينظمها {{name}}",
+    "available": "الأسهم المتاحة: {{count}}",
+    "login": "سجّل الدخول للانضمام",
+    "full": "هذه الجمعية مكتملة",
+    "fullBody": "لا توجد أسهم متبقية. اسأل المنظم إن توفر مكان.",
+    "cancelled": "تم إلغاء هذه الجمعية",
+    "cancelledBody": "ألغاها المنظم، لذلك لم تعد تستقبل أعضاء.",
+    "invalid": "رابط الدعوة هذا غير صالح",
+    "invalidBody": "تأكد من الرابط مع الشخص الذي أرسله.",
+    "member": "أنت بالفعل في هذه الجمعية",
+    "organizerOwn": "هذه جمعيتك",
+    "open": "الذهاب إلى الجمعية",
+    "pending": "طلبك في انتظار المنظم",
+    "withdraw": "سحب الطلب",
+    "reaccept": "الموافقة على الشروط المحدّثة",
+    "rulesTitle": "القواعد",
+    "join": {
+      "shares": "عدد الأسهم",
+      "preferences": "الأدوار المفضلة (حتى 3)",
+      "noPreference": "بدون تفضيل",
+      "round": "الدور {{n}}",
+      "acceptRules": "قرأت القواعد وأوافق عليها",
+      "acceptNoMoney": "أفهم أن التطبيق لا يحتفظ بالأموال ولا ينقلها",
+      "submit": "إرسال الطلب",
+      "submitted": "تم إرسال طلبك",
+      "accept": "قبول الدعوة"
+    }
   }
 }
