@@ -35,6 +35,7 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
                 break;
             case DbUpdateConcurrencyException:
             case DbUpdateException when IsOtpChallengePhoneConflict(exception):
+            case DbUpdateException when IsGameyaUniqueConflict(exception):
                 await WriteAsync(context, StatusCodes.Status409Conflict, ErrorCodes.CONCURRENCY_CONFLICT, ct: ct);
                 break;
             default:
@@ -49,6 +50,19 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
     /// <summary>True for the unique-index violation raised when two requests create the same phone's challenge.</summary>
     public static bool IsOtpChallengePhoneConflict(Exception exception) =>
         IsUniqueViolationOn(exception, "ix_otp_challenges_phone");
+
+    private static readonly string[] GameyaUniqueIndexes =
+    [
+        "ix_gameyas_invite_code", "ix_memberships_gameya_id_user_id", "ix_join_requests_gameya_id_user_id",
+        "ix_pending_invites_gameya_id_phone",
+    ];
+
+    /// <summary>
+    /// True for a filtered unique index of the gam'eya tables: a double-tapped invite, join request or approval
+    /// (or a colliding invite code) that slipped past the aggregate's own checks.
+    /// </summary>
+    public static bool IsGameyaUniqueConflict(Exception exception) =>
+        GameyaUniqueIndexes.Any(index => IsUniqueViolationOn(exception, index));
 
     /// <summary>True for the unique-index violation raised when two accounts verify the same email concurrently.</summary>
     public static bool IsUserEmailConflict(Exception exception) =>
@@ -67,11 +81,15 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
         ErrorCodes.UNAUTHENTICATED or ErrorCodes.REFRESH_TOKEN_INVALID or ErrorCodes.REFRESH_TOKEN_REUSED =>
             StatusCodes.Status401Unauthorized,
         ErrorCodes.FORBIDDEN or ErrorCodes.USER_BLOCKED => StatusCodes.Status403Forbidden,
-        ErrorCodes.NOT_FOUND => StatusCodes.Status404NotFound,
+        ErrorCodes.NOT_FOUND or ErrorCodes.GAMEYA_NOT_FOUND or ErrorCodes.INVITE_CODE_INVALID
+            or ErrorCodes.INVITE_NOT_FOUND => StatusCodes.Status404NotFound,
         ErrorCodes.FILE_TOO_LARGE => StatusCodes.Status413PayloadTooLarge,
         ErrorCodes.OTP_LOCKED or ErrorCodes.OTP_RESEND_TOO_SOON or ErrorCodes.OTP_RESEND_LIMIT
             or ErrorCodes.EMAIL_RESEND_LIMIT => StatusCodes.Status429TooManyRequests,
-        ErrorCodes.ACCOUNT_HAS_ACTIVE_GAMEYAS or ErrorCodes.EMAIL_IN_USE => StatusCodes.Status409Conflict,
+        ErrorCodes.ACCOUNT_HAS_ACTIVE_GAMEYAS or ErrorCodes.EMAIL_IN_USE or ErrorCodes.INVALID_STATUS_TRANSITION
+            or ErrorCodes.NOT_ENOUGH_SHARES or ErrorCodes.SHARES_BELOW_ASSIGNED or ErrorCodes.TERMS_NOT_ACCEPTED
+            or ErrorCodes.GAMEYA_FULL or ErrorCodes.ALREADY_MEMBER or ErrorCodes.REQUEST_ALREADY_PENDING
+            or ErrorCodes.ORGANIZER_CANNOT_LEAVE or ErrorCodes.CONCURRENCY_CONFLICT => StatusCodes.Status409Conflict,
         ErrorCodes.SMS_SEND_FAILED => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status400BadRequest
     };

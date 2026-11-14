@@ -29,9 +29,10 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("App")
             ?? throw new InvalidOperationException("ConnectionStrings:App is not configured.");
 
-        services.AddDbContext<AppDbContext>(options =>
+        services.AddScoped<AuditingInterceptor>();
+        services.AddDbContext<AppDbContext>((sp, options) =>
         {
-            AppDbContext.Configure(options, connectionString);
+            AppDbContext.Configure(options, connectionString, sp.GetRequiredService<AuditingInterceptor>());
             if (environment.IsDevelopment()) options.EnableDetailedErrors();
         });
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());

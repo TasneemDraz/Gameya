@@ -28,7 +28,6 @@ public class UserTests
         e.TargetType.ShouldBe("User");
         e.GameyaId.ShouldBeNull();
         u.Roles.ShouldBeEmpty();
-        u.CreatedAt.ShouldBe(T0);
     }
 
     [Theory]

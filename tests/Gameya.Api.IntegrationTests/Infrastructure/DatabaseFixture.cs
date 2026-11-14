@@ -39,10 +39,17 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
     public AppDbContext CreateAppContext() => CreateContext(AppConnectionString);
 
-    private static AppDbContext CreateContext(string connectionString)
+    /// <summary>A context whose audit columns come from the given interceptor (fixed clock, chosen actor).</summary>
+    public AppDbContext CreateAppContext(AuditingInterceptor auditing) => CreateContext(AppConnectionString, auditing);
+
+    /// <summary>A context on another database in the same container, for migration tests.</summary>
+    public AppDbContext CreateContextFor(string database) =>
+        CreateContext(new SqlConnectionStringBuilder(MigratorConnectionString) { InitialCatalog = database }.ConnectionString);
+
+    private static AppDbContext CreateContext(string connectionString, AuditingInterceptor? auditing = null)
     {
         var builder = new DbContextOptionsBuilder<AppDbContext>();
-        AppDbContext.Configure(builder, connectionString);
+        AppDbContext.Configure(builder, connectionString, auditing);
         return new AppDbContext(builder.Options);
     }
 }
