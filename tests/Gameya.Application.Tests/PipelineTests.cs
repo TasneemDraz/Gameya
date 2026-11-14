@@ -2,6 +2,7 @@ using FluentValidation;
 using Gameya.Application.Abstractions;
 using Gameya.Application.Behaviors;
 using Gameya.Application.Common;
+using Gameya.Application.Gameyas;
 using Gameya.Application.Security;
 using Gameya.Domain.Activity;
 using Gameya.Domain.Common;
@@ -32,6 +33,15 @@ public class PipelineTests
     public sealed record AuthQuery : IQuery<int>;
 
     public sealed record Unmarked : IQuery<int>;
+
+    [RequiresGameyaMember]
+    public sealed record MemberQuery(Guid GameyaId) : IQuery<int>, IGameyaRequest;
+
+    [RequiresGameyaOrganizer]
+    public sealed record OrganizerCmd(Guid GameyaId) : ICommand<int>, IGameyaRequest;
+
+    [RequiresGameyaMember]
+    public sealed record MemberQueryWithoutId : IQuery<int>;
 
     private sealed class PublicCmdValidator : AbstractValidator<PublicCmd>
     {
@@ -92,6 +102,13 @@ public class PipelineTests
         return u;
     }
 
+    private static IGameyaAccess Access(GameyaRole role = GameyaRole.None)
+    {
+        var a = Substitute.For<IGameyaAccess>();
+        a.GetRoleAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(role);
+        return a;
+    }
+
     private static IClock Clock()
     {
         var c = Substitute.For<IClock>();
@@ -122,7 +139,7 @@ public class PipelineTests
     [Fact]
     public async Task RequiresAuth_rejects_anonymous_with_UNAUTHENTICATED()
     {
-        var behavior = new AuthorizationBehavior<AuthCmd, int>(CurrentUser(null));
+        var behavior = new AuthorizationBehavior<AuthCmd, int>(CurrentUser(null), Access());
         var ex = await Should.ThrowAsync<DomainException>(() =>
             behavior.Handle(new AuthCmd(), _ => Task.FromResult(1), default));
         ex.Code.ShouldBe(ErrorCodes.UNAUTHENTICATED);
@@ -131,16 +148,16 @@ public class PipelineTests
     [Fact]
     public async Task RequiresAuth_allows_authenticated_and_PublicAccess_allows_anonymous()
     {
-        (await new AuthorizationBehavior<AuthCmd, int>(CurrentUser(Guid.NewGuid()))
+        (await new AuthorizationBehavior<AuthCmd, int>(CurrentUser(Guid.NewGuid()), Access())
             .Handle(new AuthCmd(), _ => Task.FromResult(1), default)).ShouldBe(1);
-        (await new AuthorizationBehavior<PublicCmd, int>(CurrentUser(null))
+        (await new AuthorizationBehavior<PublicCmd, int>(CurrentUser(null), Access())
             .Handle(new PublicCmd("x"), _ => Task.FromResult(2), default)).ShouldBe(2);
     }
 
     [Fact]
     public async Task RequiresRole_rejects_user_without_role_with_FORBIDDEN()
     {
-        var behavior = new AuthorizationBehavior<AdminCmd, int>(CurrentUser(Guid.NewGuid(), "Member"));
+        var behavior = new AuthorizationBehavior<AdminCmd, int>(CurrentUser(Guid.NewGuid(), "Member"), Access());
         var ex = await Should.ThrowAsync<DomainException>(() =>
             behavior.Handle(new AdminCmd(), _ => Task.FromResult(1), default));
         ex.Code.ShouldBe(ErrorCodes.FORBIDDEN);
@@ -150,20 +167,88 @@ public class PipelineTests
     public async Task RequiresRole_rejects_anonymous_with_UNAUTHENTICATED_and_allows_role_holder()
     {
         var anon = await Should.ThrowAsync<DomainException>(() =>
-            new AuthorizationBehavior<AdminCmd, int>(CurrentUser(null))
+            new AuthorizationBehavior<AdminCmd, int>(CurrentUser(null), Access())
                 .Handle(new AdminCmd(), _ => Task.FromResult(1), default));
         anon.Code.ShouldBe(ErrorCodes.UNAUTHENTICATED);
 
-        (await new AuthorizationBehavior<AdminCmd, int>(CurrentUser(Guid.NewGuid(), "Admin"))
+        (await new AuthorizationBehavior<AdminCmd, int>(CurrentUser(Guid.NewGuid(), "Admin"), Access())
             .Handle(new AdminCmd(), _ => Task.FromResult(3), default)).ShouldBe(3);
     }
 
     [Fact]
     public async Task Request_without_access_attribute_fails_closed()
     {
-        var behavior = new AuthorizationBehavior<Unmarked, int>(CurrentUser(Guid.NewGuid()));
+        var behavior = new AuthorizationBehavior<Unmarked, int>(CurrentUser(Guid.NewGuid()), Access());
         await Should.ThrowAsync<InvalidOperationException>(() =>
             behavior.Handle(new Unmarked(), _ => Task.FromResult(1), default));
+    }
+
+    [Fact]
+    public async Task Gameya_member_request_from_outsider_is_GAMEYA_NOT_FOUND()
+    {
+        var behavior = new AuthorizationBehavior<MemberQuery, int>(CurrentUser(Guid.NewGuid()), Access(GameyaRole.None));
+        var ran = false;
+
+        var ex = await Should.ThrowAsync<DomainException>(() =>
+            behavior.Handle(new MemberQuery(Guid.NewGuid()), _ => { ran = true; return Task.FromResult(1); }, default));
+
+        ex.Code.ShouldBe(ErrorCodes.GAMEYA_NOT_FOUND);
+        ran.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Gameya_organizer_request_from_member_is_GAMEYA_NOT_FOUND()
+    {
+        var behavior = new AuthorizationBehavior<OrganizerCmd, int>(CurrentUser(Guid.NewGuid()), Access(GameyaRole.Member));
+
+        var ex = await Should.ThrowAsync<DomainException>(() =>
+            behavior.Handle(new OrganizerCmd(Guid.NewGuid()), _ => Task.FromResult(1), default));
+
+        ex.Code.ShouldBe(ErrorCodes.GAMEYA_NOT_FOUND);
+    }
+
+    [Fact]
+    public async Task Gameya_requests_pass_for_the_right_role()
+    {
+        var user = Guid.NewGuid();
+        var gameyaId = Guid.NewGuid();
+        var access = Access(GameyaRole.Member);
+
+        (await new AuthorizationBehavior<MemberQuery, int>(CurrentUser(user), access)
+            .Handle(new MemberQuery(gameyaId), _ => Task.FromResult(1), default)).ShouldBe(1);
+        await access.Received(1).GetRoleAsync(gameyaId, user, Arg.Any<CancellationToken>());
+
+        (await new AuthorizationBehavior<MemberQuery, int>(CurrentUser(user), Access(GameyaRole.Organizer))
+            .Handle(new MemberQuery(gameyaId), _ => Task.FromResult(2), default)).ShouldBe(2);
+        (await new AuthorizationBehavior<OrganizerCmd, int>(CurrentUser(user), Access(GameyaRole.Organizer))
+            .Handle(new OrganizerCmd(gameyaId), _ => Task.FromResult(3), default)).ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task Gameya_request_from_anonymous_is_UNAUTHENTICATED()
+    {
+        var access = Access(GameyaRole.Organizer);
+
+        var member = await Should.ThrowAsync<DomainException>(() =>
+            new AuthorizationBehavior<MemberQuery, int>(CurrentUser(null), access)
+                .Handle(new MemberQuery(Guid.NewGuid()), _ => Task.FromResult(1), default));
+        var organizer = await Should.ThrowAsync<DomainException>(() =>
+            new AuthorizationBehavior<OrganizerCmd, int>(CurrentUser(null), access)
+                .Handle(new OrganizerCmd(Guid.NewGuid()), _ => Task.FromResult(1), default));
+
+        member.Code.ShouldBe(ErrorCodes.UNAUTHENTICATED);
+        organizer.Code.ShouldBe(ErrorCodes.UNAUTHENTICATED);
+        await access.DidNotReceiveWithAnyArgs().GetRoleAsync(default, default, default);
+    }
+
+    [Fact]
+    public async Task Gameya_attribute_without_IGameyaRequest_fails_closed()
+    {
+        var behavior = new AuthorizationBehavior<MemberQueryWithoutId, int>(
+            CurrentUser(Guid.NewGuid()), Access(GameyaRole.Organizer));
+
+        await Should.ThrowAsync<InvalidOperationException>(() =>
+            behavior.Handle(new MemberQueryWithoutId(), _ => Task.FromResult(1), default));
     }
 
     [Fact]

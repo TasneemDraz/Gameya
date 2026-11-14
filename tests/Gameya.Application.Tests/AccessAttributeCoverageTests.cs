@@ -1,4 +1,5 @@
 using Gameya.Application.Abstractions;
+using Gameya.Application.Gameyas;
 using Gameya.Application.Security;
 using MediatR;
 
@@ -25,6 +26,13 @@ public class AccessAttributeCoverageTests
         types.Where(IsRequest).Where(t => !IsCommandOrQuery(t))
             .Select(t => $"{t.FullName} is neither ICommand<> nor IQuery<>");
 
+    internal static IEnumerable<string> GameyaViolations(IEnumerable<Type> types) =>
+        types.Where(IsRequest)
+            .Where(t => t.IsDefined(typeof(RequiresGameyaMemberAttribute), inherit: false) ||
+                        t.IsDefined(typeof(RequiresGameyaOrganizerAttribute), inherit: false))
+            .Where(t => !typeof(IGameyaRequest).IsAssignableFrom(t))
+            .Select(t => $"{t.FullName} is gam'eya-scoped but does not implement IGameyaRequest");
+
     [Fact]
     public void Every_request_has_exactly_one_access_attribute()
     {
@@ -37,6 +45,29 @@ public class AccessAttributeCoverageTests
     {
         var violations = KindViolations(typeof(DependencyInjection).Assembly.GetTypes()).ToList();
         violations.ShouldBeEmpty(string.Join("; ", violations));
+    }
+
+    [Fact]
+    public void Every_gameya_scoped_request_implements_IGameyaRequest()
+    {
+        var violations = GameyaViolations(typeof(DependencyInjection).Assembly.GetTypes()).ToList();
+        violations.ShouldBeEmpty(string.Join("; ", violations));
+    }
+
+    [RequiresGameyaMember]
+    private sealed record ScopedWithId(Guid GameyaId) : IQuery<int>, IGameyaRequest;
+
+    [RequiresGameyaOrganizer]
+    private sealed record ScopedWithoutId : ICommand<int>;
+
+    [RequiresGameyaMember]
+    private sealed record MemberScopedWithoutId : IQuery<int>;
+
+    [Fact]
+    public void Gameya_check_detects_scoped_requests_without_IGameyaRequest()
+    {
+        GameyaViolations([typeof(ScopedWithId), typeof(ScopedWithoutId), typeof(MemberScopedWithoutId), typeof(Ok)])
+            .Count().ShouldBe(2);
     }
 
     [PublicAccess, RequiresAuth]
