@@ -495,25 +495,23 @@ export class GameyaFormPage {
     });
   }
 
-  /** Server errors arrive as flat camelCase keys that match the control names. */
+  /**
+   * Server errors arrive as flat camelCase keys that match the control names. Coded problems are
+   * already reported by the error interceptor, except VALIDATION_FAILED: when none of its keys
+   * match a control, a general message is shown here.
+   */
   private showServerErrors(err: unknown): void {
     const problem = problemOf(err);
-    const errors = problem?.errors;
-    if (!errors) {
-      if (problem?.code) {
-        const key = `errors.${problem.code}`;
-        const text = this.transloco.translate(key, problem.params ?? {});
-        this.formError.set(
-          text && text !== key ? text : this.transloco.translate('gameyas.form.errors.general'),
-        );
-      }
-      return;
-    }
-    for (const [key, messages] of Object.entries(errors)) {
+    let matched = 0;
+    for (const [key, messages] of Object.entries(problem?.errors ?? {})) {
       const control = (this.form.controls as Record<string, AbstractControl>)[key];
       if (!control || messages.length === 0) continue;
       control.setErrors({ ...control.errors, server: messages[0] });
       control.markAsTouched();
+      matched++;
+    }
+    if (problem?.code === 'VALIDATION_FAILED' && matched === 0) {
+      this.formError.set(this.transloco.translate('gameyas.form.errors.general'));
     }
   }
 

@@ -9,7 +9,6 @@ import { Gameya, GameyaMember } from '../gameya.models';
 import { GameyaFormPage } from './gameya-form.page';
 
 const texts = {
-  errors: { INVALID_STATUS_TRANSITION: 'BAD-STATUS' },
   gameyas: {
     form: {
       errors: { required: 'REQUIRED', server: 'SERVER-INVALID', general: 'GENERAL' },
@@ -283,7 +282,21 @@ describe('GameyaFormPage', () => {
     },
   );
 
-  it('a coded error without an errors map shows a form-level message', () => {
+  it('a validation error matching no control shows a form-level message', () => {
+    const f = setup();
+    fillValid(f);
+    submit(f);
+    ctrl
+      .expectOne('/api/gameyas')
+      .flush(
+        { code: 'VALIDATION_FAILED', errors: { unknownField: ['bad'] } },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    f.detectChanges();
+    expect(q(f, 'form-error')?.textContent).toContain('GENERAL');
+  });
+
+  it('other coded errors add no inline message (the interceptor reports them)', () => {
     const f = setup();
     fillValid(f);
     submit(f);
@@ -291,12 +304,7 @@ describe('GameyaFormPage', () => {
       .expectOne('/api/gameyas')
       .flush({ code: 'INVALID_STATUS_TRANSITION' }, { status: 409, statusText: 'Conflict' });
     f.detectChanges();
-    expect(q(f, 'form-error')?.textContent).toContain('BAD-STATUS');
-
-    submit(f);
-    ctrl.expectOne('/api/gameyas').flush({ code: 'UNKNOWN_X' }, { status: 400, statusText: 'Bad' });
-    f.detectChanges();
-    expect(q(f, 'form-error')?.textContent).toContain('GENERAL');
+    expect(q(f, 'form-error')).toBeNull();
   });
 
   it('a failed members fetch still lets the user save, asking to confirm without a count', () => {
