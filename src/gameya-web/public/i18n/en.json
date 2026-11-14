@@ -290,7 +290,12 @@
       "organizerBadge": "Organizer",
       "shares": "{{count}} shares",
       "deletedUser": "Deleted user",
-      "noMoneyNotice": "The app never holds or moves money. All payments happen directly between you; the app only records and confirms them."
+      "noMoneyNotice": "The app never holds or moves money. All payments happen directly between you; the app only records and confirms them.",
+      "reacceptShares": "Number of shares: was {{old}}, now {{new}}",
+      "reacceptFrequency": "How often: was {{old}}, now {{new}}",
+      "noRules": "The organizer has not written any rules.",
+      "loadFailed": "This gam'eya could not be loaded.",
+      "backToList": "Back to my gam'eyas"
     },
     "manage": {
       "inviteLink": "Invite link",
@@ -321,7 +326,14 @@
       "removeMember": "Remove",
       "removeTitle": "Remove this member?",
       "removeReason": "Reason (at least 5 characters)",
-      "none": "Nothing here yet"
+      "none": "Nothing here yet",
+      "code": "Invite code",
+      "approveNamed": "Approve {{name}}",
+      "rejectNamed": "Decline {{name}}",
+      "revokeNamed": "Cancel the invite for {{name}}",
+      "removeNamed": "Remove {{name}}",
+      "editSettings": "Edit settings",
+      "preferences": "Preferred turns: {{rounds}}"
     }
   },
   "invite": {

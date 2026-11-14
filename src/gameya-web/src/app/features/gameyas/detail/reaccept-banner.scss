@@ -1,0 +1,31 @@
+:host {
+  display: block;
+  margin-block-end: 16px;
+}
+
+.banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  color: var(--gy-warning-fg, #7a4b00);
+  background: var(--gy-warning-bg, #fff4e0);
+  border-radius: 12px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: 0;
+
+  p {
+    margin: 0;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

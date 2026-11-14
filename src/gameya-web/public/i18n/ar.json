@@ -290,7 +290,12 @@
       "organizerBadge": "المنظم",
       "shares": "{{count}} أسهم",
       "deletedUser": "مستخدم محذوف",
-      "noMoneyNotice": "التطبيق لا يحتفظ بالأموال ولا ينقلها أبداً. كل المدفوعات تتم مباشرة بينكم؛ التطبيق يسجلها ويؤكدها فقط."
+      "noMoneyNotice": "التطبيق لا يحتفظ بالأموال ولا ينقلها أبداً. كل المدفوعات تتم مباشرة بينكم؛ التطبيق يسجلها ويؤكدها فقط.",
+      "reacceptShares": "عدد الأسهم: كان {{old}} وأصبح {{new}}",
+      "reacceptFrequency": "التكرار: كان {{old}} وأصبح {{new}}",
+      "noRules": "لم يكتب المنظم أي قواعد.",
+      "loadFailed": "تعذر تحميل هذه الجمعية.",
+      "backToList": "العودة إلى جمعياتي"
     },
     "manage": {
       "inviteLink": "رابط الدعوة",
@@ -321,7 +326,14 @@
       "removeMember": "إزالة",
       "removeTitle": "إزالة هذا العضو؟",
       "removeReason": "السبب (5 أحرف على الأقل)",
-      "none": "لا شيء هنا بعد"
+      "none": "لا شيء هنا بعد",
+      "code": "كود الدعوة",
+      "approveNamed": "قبول {{name}}",
+      "rejectNamed": "رفض {{name}}",
+      "revokeNamed": "إلغاء دعوة {{name}}",
+      "removeNamed": "إزالة {{name}}",
+      "editSettings": "تعديل الإعدادات",
+      "preferences": "الأدوار المفضلة: {{rounds}}"
     }
   },
   "invite": {
