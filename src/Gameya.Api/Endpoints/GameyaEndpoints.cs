@@ -46,6 +46,15 @@ public static class GameyaEndpoints
     {
         var group = app.MapGroup("/api/gameyas");
 
+        group.MapGet("", async (ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new ListMyGameyasQuery(), ct)));
+
+        group.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new GetGameyaQuery(id), ct)));
+
+        group.MapGet("/{id:guid}/activity", async (Guid id, int? page, ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new GetGameyaActivityQuery(id, page ?? 1), ct)));
+
         group.MapPost("", async (GameyaSettingsBody body, ISender sender, CancellationToken ct) =>
         {
             var id = await sender.Send(new CreateGameyaCommand(body.ToSettings(), body.OrganizerShares), ct);
@@ -89,6 +98,9 @@ public static class GameyaEndpoints
 
     private static void MapMembership(RouteGroupBuilder group)
     {
+        group.MapGet("/{id:guid}/members", async (Guid id, ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new GetMembersQuery(id), ct)));
+
         group.MapPost("/{id:guid}/leave", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             await sender.Send(new LeaveGameyaCommand(id), ct);
@@ -111,6 +123,9 @@ public static class GameyaEndpoints
 
     private static void MapJoinRequests(RouteGroupBuilder group)
     {
+        group.MapGet("/{id:guid}/join-requests", async (Guid id, ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new GetJoinRequestsQuery(id), ct)));
+
         group.MapPost("/{id:guid}/join-requests/{requestId:guid}/approve",
             async (Guid id, Guid requestId, ISender sender, CancellationToken ct) =>
             {
@@ -134,6 +149,9 @@ public static class GameyaEndpoints
 
     private static void MapInvites(RouteGroupBuilder group)
     {
+        group.MapGet("/{id:guid}/invites", async (Guid id, ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new GetPendingInvitesQuery(id), ct)));
+
         group.MapPost("/{id:guid}/invites", async (Guid id, InviteBody body, ISender sender, CancellationToken ct) =>
         {
             var inviteId = await sender.Send(new InviteByPhoneCommand(id, body.Phone ?? string.Empty, body.ShareCount), ct);

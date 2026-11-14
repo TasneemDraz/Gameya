@@ -61,7 +61,7 @@ try
     builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = c =>
         c.ProblemDetails.Extensions["traceId"] = c.HttpContext.GetCorrelationId());
     builder.Services.AddExceptionHandler<ProblemDetailsMapping>();
-    builder.Services.AddOtpRateLimiting();
+    builder.Services.AddGameyaRateLimiting();
 
     builder.Services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

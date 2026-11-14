@@ -48,9 +48,7 @@ public class GameyaCircle : AuditableEntity
     public int RoundCount => ShareCount;
     public decimal TotalPerShare => ContributionAmount * ShareCount;
 
-    public DateOnly EndDate => Frequency == GameyaFrequency.Monthly
-        ? CairoCalendar.MonthlyDueDate(StartDate, ShareCount - 1)
-        : StartDate.AddDays(7 * (ShareCount - 1));
+    public DateOnly EndDate => EndDateFor(StartDate, Frequency, ShareCount);
 
     public int AssignedShares => _memberships
         .Where(m => m.Status == MembershipStatus.Active)
@@ -63,6 +61,12 @@ public class GameyaCircle : AuditableEntity
 
     public int AvailableShares => ShareCount - AssignedShares - ReservedShares;
     public bool IsFull => AvailableShares == 0;
+
+    /// <summary>The last round's due date; shared with read models that only have the raw settings.</summary>
+    public static DateOnly EndDateFor(DateOnly startDate, GameyaFrequency frequency, int shareCount) =>
+        frequency == GameyaFrequency.Monthly
+            ? CairoCalendar.MonthlyDueDate(startDate, shareCount - 1)
+            : startDate.AddDays(7 * (shareCount - 1));
 
     public static GameyaCircle Create(
         Guid id, Guid organizerId, GameyaSettings settings, int organizerShares, DateOnly today, DateTimeOffset now)

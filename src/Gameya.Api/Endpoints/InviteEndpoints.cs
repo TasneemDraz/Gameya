@@ -1,10 +1,11 @@
+using Gameya.Api.Infrastructure;
 using Gameya.Application.Gameyas;
 using Gameya.Domain.Gameyas;
 using MediatR;
 
 namespace Gameya.Api.Endpoints;
 
-/// <summary>Joining through the invite code, and answering direct invites sent to the caller's phone.</summary>
+/// <summary>The public invite preview, joining through the code, and the caller's own direct invites.</summary>
 public static class InviteEndpoints
 {
     public sealed record ShareBody(IReadOnlyList<int>? Preferences);
@@ -18,6 +19,11 @@ public static class InviteEndpoints
 
     public static IEndpointRouteBuilder MapInviteEndpoints(this IEndpointRouteBuilder app)
     {
+        // Public, so it is rate-limited per IP to keep codes from being enumerated.
+        app.MapGet("/api/invite/{code}", async (string code, ISender sender, CancellationToken ct) =>
+                Results.Ok(await sender.Send(new GetInvitePreviewQuery(code), ct)))
+            .RequireRateLimiting(RateLimiting.InvitePreviewPolicy);
+
         app.MapPost("/api/invite/{code}/join", async (string code, JoinBody body, ISender sender, CancellationToken ct) =>
         {
             await sender.Send(new RequestToJoinCommand(code, body.ToShares(), body.AcceptRules, body.AcceptNoMoney), ct);
@@ -25,6 +31,9 @@ public static class InviteEndpoints
         });
 
         var mine = app.MapGroup("/api/me/invites");
+
+        mine.MapGet("", async (ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new ListMyInvitesQuery(), ct)));
 
         mine.MapPost("/{inviteId:guid}/accept",
             async (Guid inviteId, JoinBody body, ISender sender, CancellationToken ct) =>

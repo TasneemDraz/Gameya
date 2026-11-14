@@ -115,6 +115,13 @@ public sealed class JoiningTests : IDisposable
         return (await LoadAsync(ctx, gameyaId)).AvailableShares;
     }
 
+    private static async Task<List<Guid>> MyInviteIdsAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/me/invites");
+        await Ok(response, HttpStatusCode.OK);
+        return [.. (await TestApi.JsonAsync(response)).EnumerateArray().Select(i => i.GetProperty("inviteId").GetGuid())];
+    }
+
     private static string ArabicDigits(string latin) =>
         new([.. latin.Select(c => c is >= '0' and <= '9' ? (char)('٠' + (c - '0')) : c)]);
 
@@ -220,7 +227,10 @@ public sealed class JoiningTests : IDisposable
         (await AvailableAsync(id)).ShouldBe(7);
 
         var (invitee, inviteeId) = await UserAsync(phone);
+        // AC-G8: the invite made before signup is listed on first login.
+        (await MyInviteIdsAsync(invitee)).ShouldBe([inviteId]);
         await Ok(await AcceptAsync(invitee, inviteId, shares: 2));
+        (await MyInviteIdsAsync(invitee)).ShouldBeEmpty();
 
         await using var ctx = _db.CreateAppContext();
         var stored = await LoadAsync(ctx, id);
@@ -248,6 +258,8 @@ public sealed class JoiningTests : IDisposable
             invite.UserId.ShouldBe(inviteeId);
         }
 
+        // An invite to an existing user is listed for them.
+        (await MyInviteIdsAsync(invitee)).ShouldBe([inviteId]);
         await Ok(await AcceptAsync(invitee, inviteId, shares: 1));
         await using var after = _db.CreateAppContext();
         (await LoadAsync(after, id)).Memberships.ShouldContain(m => m.UserId == inviteeId && m.Status == MembershipStatus.Active);
@@ -279,10 +291,13 @@ public sealed class JoiningTests : IDisposable
         (await AvailableAsync(id)).ShouldBe(7);
         await Ok(await decliner.PostAsync($"/api/me/invites/{declined}/decline", null));
         (await AvailableAsync(id)).ShouldBe(9);
+        (await MyInviteIdsAsync(decliner)).ShouldBeEmpty();
 
         var revokedInvite = await InviteAsync(id, revokedPhone, shareCount: 1);
+        (await MyInviteIdsAsync(revoked)).ShouldBe([revokedInvite]);
         await Ok(await _organizer.DeleteAsync($"/api/gameyas/{id}/invites/{revokedInvite}"));
         (await AvailableAsync(id)).ShouldBe(9);
+        (await MyInviteIdsAsync(revoked)).ShouldBeEmpty();
         await ShouldFailWith(
             await AcceptAsync(revoked, revokedInvite, shares: 1), HttpStatusCode.NotFound, ErrorCodes.INVITE_NOT_FOUND);
 
