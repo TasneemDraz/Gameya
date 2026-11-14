@@ -12,11 +12,20 @@ public sealed class GameyaAggregateByIdSpec : Specification<GameyaCircle>
     public GameyaAggregateByIdSpec(Guid id)
     {
         Query.Where(g => g.Id == id);
-        Query.Include(g => g.Memberships.Where(m => m.Status == MembershipStatus.Active))
+        Query.IncludeLiveChildren();
+    }
+}
+
+internal static class GameyaAggregateIncludes
+{
+    /// <summary>The live children every aggregate load needs, so the domain sees capacity and duplicates.</summary>
+    public static void IncludeLiveChildren(this ISpecificationBuilder<GameyaCircle> query)
+    {
+        query.Include(g => g.Memberships.Where(m => m.Status == MembershipStatus.Active))
             .ThenInclude(m => m.Shares);
-        Query.Include(g => g.JoinRequests.Where(r => r.Status == JoinRequestStatus.Pending))
+        query.Include(g => g.JoinRequests.Where(r => r.Status == JoinRequestStatus.Pending))
             .ThenInclude(r => r.Shares);
-        Query.Include(g => g.PendingInvites.Where(i => i.Status == InviteStatus.Pending));
-        Query.AsSplitQuery();
+        query.Include(g => g.PendingInvites.Where(i => i.Status == InviteStatus.Pending));
+        query.AsSplitQuery();
     }
 }

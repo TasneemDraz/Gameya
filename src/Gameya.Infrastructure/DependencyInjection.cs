@@ -1,7 +1,6 @@
 using Gameya.Application.Abstractions;
 using Gameya.Infrastructure.Email;
 using Gameya.Infrastructure.Files;
-using Gameya.Infrastructure.Participation;
 using Gameya.Infrastructure.Persistence;
 using Gameya.Infrastructure.Security;
 using Gameya.Infrastructure.Sms;
@@ -37,7 +36,6 @@ public static class DependencyInjection
         });
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddSingleton<IClock, SystemClock>();
-        services.AddSingleton<IActiveParticipationChecker, NoParticipationChecker>();
 
         var hashKey = configuration["Security:HashKey"];
         if (string.IsNullOrWhiteSpace(hashKey))

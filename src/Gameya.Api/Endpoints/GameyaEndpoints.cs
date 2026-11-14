@@ -1,6 +1,7 @@
 using Gameya.Application.Gameyas;
 using Gameya.Domain.Gameyas;
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Gameya.Api.Endpoints;
 
@@ -75,6 +76,75 @@ public static class GameyaEndpoints
             return Results.NoContent();
         });
 
+        MapMembership(group);
+        MapJoinRequests(group);
+        MapInvites(group);
+
         return app;
+    }
+
+    public sealed record ReasonBody(string? Reason);
+
+    public sealed record InviteBody(string? Phone, int ShareCount);
+
+    private static void MapMembership(RouteGroupBuilder group)
+    {
+        group.MapPost("/{id:guid}/leave", async (Guid id, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new LeaveGameyaCommand(id), ct);
+            return Results.NoContent();
+        });
+
+        group.MapPost("/{id:guid}/reaccept", async (Guid id, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new ReacceptTermsCommand(id), ct);
+            return Results.NoContent();
+        });
+
+        group.MapDelete("/{id:guid}/members/{userId:guid}",
+            async (Guid id, Guid userId, [FromBody] ReasonBody? body, ISender sender, CancellationToken ct) =>
+            {
+                await sender.Send(new RemoveMemberCommand(id, userId, body?.Reason ?? string.Empty), ct);
+                return Results.NoContent();
+            });
+    }
+
+    private static void MapJoinRequests(RouteGroupBuilder group)
+    {
+        group.MapPost("/{id:guid}/join-requests/{requestId:guid}/approve",
+            async (Guid id, Guid requestId, ISender sender, CancellationToken ct) =>
+            {
+                await sender.Send(new ApproveJoinRequestCommand(id, requestId), ct);
+                return Results.NoContent();
+            });
+
+        group.MapPost("/{id:guid}/join-requests/{requestId:guid}/reject",
+            async (Guid id, Guid requestId, ReasonBody? body, ISender sender, CancellationToken ct) =>
+            {
+                await sender.Send(new RejectJoinRequestCommand(id, requestId, body?.Reason), ct);
+                return Results.NoContent();
+            });
+
+        group.MapDelete("/{id:guid}/join-requests/mine", async (Guid id, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new WithdrawJoinRequestCommand(id), ct);
+            return Results.NoContent();
+        });
+    }
+
+    private static void MapInvites(RouteGroupBuilder group)
+    {
+        group.MapPost("/{id:guid}/invites", async (Guid id, InviteBody body, ISender sender, CancellationToken ct) =>
+        {
+            var inviteId = await sender.Send(new InviteByPhoneCommand(id, body.Phone ?? string.Empty, body.ShareCount), ct);
+            return Results.Created($"/api/gameyas/{id}/invites/{inviteId}", new { id = inviteId });
+        });
+
+        group.MapDelete("/{id:guid}/invites/{inviteId:guid}",
+            async (Guid id, Guid inviteId, ISender sender, CancellationToken ct) =>
+            {
+                await sender.Send(new RevokeInviteCommand(id, inviteId), ct);
+                return Results.NoContent();
+            });
     }
 }

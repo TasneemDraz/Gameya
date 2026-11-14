@@ -115,6 +115,7 @@ try
     app.MapAuthEndpoints();
     app.MapMeEndpoints();
     app.MapGameyaEndpoints();
+    app.MapInviteEndpoints();
     app.MapFileEndpoints();
     if (app.Environment.IsDevelopmentOrE2E())
     {
