@@ -272,6 +272,35 @@ public class GameyaCircleJoiningTests
         g.Memberships.Count(m => m.UserId == U).ShouldBe(1);
     }
 
+    public static TheoryData<string> JoiningOperations() =>
+    [
+        "RequestToJoin", "WithdrawJoinRequest", "ApproveJoinRequest", "RejectJoinRequest",
+        "InviteByPhone", "RevokeInvite", "AcceptInvite", "DeclineInvite",
+    ];
+
+    [Theory]
+    [MemberData(nameof(JoiningOperations))]
+    public void Every_joining_operation_requires_Recruiting(string operation)
+    {
+        var draft = GameyaCircle.Create(
+            Guid.NewGuid(), Org, GameyaTestData.Settings(), 1, GameyaTestData.Today, Now);
+        var id = Guid.NewGuid();
+        Action act = operation switch
+        {
+            "RequestToJoin" => () => draft.RequestToJoin(U, [Share()]),
+            "WithdrawJoinRequest" => () => draft.WithdrawJoinRequest(U),
+            "ApproveJoinRequest" => () => draft.ApproveJoinRequest(id, Now),
+            "RejectJoinRequest" => () => draft.RejectJoinRequest(id, null),
+            "InviteByPhone" => () => draft.InviteByPhone(P, null, 1),
+            "RevokeInvite" => () => draft.RevokeInvite(id),
+            "AcceptInvite" => () => draft.AcceptInvite(id, U, P, [Share()], Now),
+            "DeclineInvite" => () => draft.DeclineInvite(id, U, P),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation)),
+        };
+
+        Thrown(act, ErrorCodes.INVALID_STATUS_TRANSITION);
+    }
+
     [Fact]
     public void Decline_and_revoke_release_reserved_shares()
     {

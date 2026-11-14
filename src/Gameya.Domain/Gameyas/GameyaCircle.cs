@@ -124,6 +124,7 @@ public class GameyaCircle : AuditableEntity
 
     public void WithdrawJoinRequest(Guid userId)
     {
+        RequireRecruiting();
         var request = _joinRequests.FirstOrDefault(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending)
             ?? throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
 
@@ -151,6 +152,7 @@ public class GameyaCircle : AuditableEntity
 
     public void RejectJoinRequest(Guid requestId, string? reason)
     {
+        RequireRecruiting();
         if (reason is { Length: > MaxRejectReasonLength })
             throw Invalid("reason");
         var request = FindPendingRequest(requestId);
@@ -176,6 +178,7 @@ public class GameyaCircle : AuditableEntity
 
     public void RevokeInvite(Guid inviteId)
     {
+        RequireRecruiting();
         var invite = FindPendingInvite(inviteId);
 
         invite.Revoke();
@@ -212,6 +215,7 @@ public class GameyaCircle : AuditableEntity
 
     public void DeclineInvite(Guid inviteId, Guid userId, PhoneNumber phone)
     {
+        RequireRecruiting();
         var invite = FindPendingInvite(inviteId, phone);
 
         invite.Decline(userId);
