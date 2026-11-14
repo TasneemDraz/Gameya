@@ -114,6 +114,7 @@ try
     app.MapGameyaHealth();
     app.MapAuthEndpoints();
     app.MapMeEndpoints();
+    app.MapGameyaEndpoints();
     app.MapFileEndpoints();
     if (app.Environment.IsDevelopmentOrE2E())
     {
