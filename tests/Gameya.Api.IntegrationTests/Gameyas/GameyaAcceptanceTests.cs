@@ -73,10 +73,11 @@ public sealed class GameyaAcceptanceTests : IDisposable
     private Task<HttpResponseMessage> ApproveAsync(Guid gameyaId, Guid requestId) =>
         _organizer.PostAsync($"/api/gameyas/{gameyaId}/join-requests/{requestId}/approve", null);
 
-    private static async Task ShouldFailWith(HttpResponseMessage response, HttpStatusCode status, string code)
+    /// <summary>A 409 whose code is the concurrency conflict or the domain's own rejection, depending on request overlap.</summary>
+    private static async Task ShouldFailWithOneOf(HttpResponseMessage response, params string[] codes)
     {
-        response.StatusCode.ShouldBe(status, await response.Content.ReadAsStringAsync());
-        (await TestApi.JsonAsync(response)).GetProperty("code").GetString().ShouldBe(code);
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict, await response.Content.ReadAsStringAsync());
+        (await TestApi.JsonAsync(response)).GetProperty("code").GetString().ShouldBeOneOf(codes);
     }
 
     [Fact]
@@ -164,13 +165,15 @@ public sealed class GameyaAcceptanceTests : IDisposable
 
         results.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBe(1);
         var loser = results.Single(r => r.StatusCode != HttpStatusCode.NoContent);
-        await ShouldFailWith(loser, HttpStatusCode.Conflict, "CONCURRENCY_CONFLICT");
+        await ShouldFailWithOneOf(loser, "CONCURRENCY_CONFLICT", "GAMEYA_FULL");
 
         await using var ctx = _db.CreateAppContext();
         var shares = await ctx.Gameyas.Where(g => g.Id == id)
             .SelectMany(g => g.Memberships).Where(m => m.Status == MembershipStatus.Active)
             .SelectMany(m => m.Shares).CountAsync();
         shares.ShouldBe(3);
+        (await ctx.JoinRequests.CountAsync(r => r.GameyaId == id && r.Status == JoinRequestStatus.Approved)).ShouldBe(2);
+        (await ctx.JoinRequests.CountAsync(r => r.GameyaId == id && r.Status == JoinRequestStatus.Pending)).ShouldBe(1);
     }
 
     [Fact]
@@ -185,7 +188,7 @@ public sealed class GameyaAcceptanceTests : IDisposable
 
         results.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
         var loser = results.Single(r => r.StatusCode != HttpStatusCode.Created);
-        loser.StatusCode.ShouldBe(HttpStatusCode.Conflict, await loser.Content.ReadAsStringAsync());
+        await ShouldFailWithOneOf(loser, "CONCURRENCY_CONFLICT", "REQUEST_ALREADY_PENDING");
 
         await using var ctx = _db.CreateAppContext();
         var pending = await ctx.PendingInvites.CountAsync(i => i.GameyaId == id && i.Status == InviteStatus.Pending);
@@ -202,7 +205,7 @@ public sealed class GameyaAcceptanceTests : IDisposable
 
         results.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBe(1);
         var loser = results.Single(r => r.StatusCode != HttpStatusCode.NoContent);
-        loser.StatusCode.ShouldBe(HttpStatusCode.Conflict, await loser.Content.ReadAsStringAsync());
+        await ShouldFailWithOneOf(loser, "CONCURRENCY_CONFLICT", "REQUEST_ALREADY_PENDING");
 
         await using var ctx = _db.CreateAppContext();
         (await ctx.JoinRequests.CountAsync(r => r.GameyaId == id && r.Status == JoinRequestStatus.Pending)).ShouldBe(1);
