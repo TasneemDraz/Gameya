@@ -10,6 +10,6 @@ public enum OrderMethod { Manual, RandomDraw, ByRequest }
 
 public enum MembershipStatus { Active, Left, Removed }
 
-public enum JoinRequestStatus { Pending, Approved, Rejected, Cancelled }
+public enum JoinRequestStatus { Pending, Approved, Rejected, Withdrawn }
 
 public enum InviteStatus { Pending, Accepted, Declined, Revoked }
