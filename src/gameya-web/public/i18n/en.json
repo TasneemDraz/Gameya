@@ -252,6 +252,9 @@
       "sharesInc": "More shares",
       "sharesDec": "Fewer shares",
       "save": "Save",
+      "notEditable": "This gam'eya can no longer be edited.",
+      "backToGameya": "Back to the gam'eya",
+      "reacceptMessageUnknown": "Some members will be asked to accept the new terms. Continue?",
       "reacceptTitle": "Members must accept again",
       "reacceptMessage": "{{count}} member(s) will be asked to accept the new terms. Continue?",
       "errors": {
@@ -262,7 +265,8 @@
         "maxlength": "This is too long.",
         "integer": "Enter a whole number.",
         "pastDate": "The date cannot be in the past.",
-        "server": "This value is not accepted."
+        "server": "This value is not accepted.",
+        "general": "Something went wrong. Please try again."
       }
     },
     "page": {

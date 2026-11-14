@@ -9,9 +9,12 @@ import { Gameya, GameyaMember } from '../gameya.models';
 import { GameyaFormPage } from './gameya-form.page';
 
 const texts = {
+  errors: { INVALID_STATUS_TRANSITION: 'BAD-STATUS' },
   gameyas: {
     form: {
-      errors: { required: 'REQUIRED', server: 'SERVER-INVALID' },
+      errors: { required: 'REQUIRED', server: 'SERVER-INVALID', general: 'GENERAL' },
+      notEditable: 'NOT-EDITABLE',
+      reacceptMessageUnknown: 'REACCEPT-UNKNOWN',
       reacceptTitle: 'REACCEPT-TITLE',
       reacceptMessage: 'REACCEPT {{count}}',
     },
@@ -269,5 +272,56 @@ describe('GameyaFormPage', () => {
     f.detectChanges();
     const err = f.nativeElement.querySelector('mat-error') as HTMLElement | null;
     expect(err?.textContent).toContain('SERVER-INVALID');
+  });
+
+  it.each(['Active', 'Cancelled'] as const)(
+    'editing a %s gameya shows a notice and no form',
+    (status) => {
+      const f = setupEdit(status);
+      expect(q(f, 'not-editable')?.textContent).toContain('NOT-EDITABLE');
+      expect(f.nativeElement.querySelector('form')).toBeNull();
+    },
+  );
+
+  it('a coded error without an errors map shows a form-level message', () => {
+    const f = setup();
+    fillValid(f);
+    submit(f);
+    ctrl
+      .expectOne('/api/gameyas')
+      .flush({ code: 'INVALID_STATUS_TRANSITION' }, { status: 409, statusText: 'Conflict' });
+    f.detectChanges();
+    expect(q(f, 'form-error')?.textContent).toContain('BAD-STATUS');
+
+    submit(f);
+    ctrl.expectOne('/api/gameyas').flush({ code: 'UNKNOWN_X' }, { status: 400, statusText: 'Bad' });
+    f.detectChanges();
+    expect(q(f, 'form-error')?.textContent).toContain('GENERAL');
+  });
+
+  it('a failed members fetch still lets the user save, asking to confirm without a count', () => {
+    const f = setup('g1');
+    ctrl.expectOne('/api/gameyas/g1').flush(existing({ status: 'Recruiting' }));
+    ctrl
+      .expectOne('/api/gameyas/g1/members')
+      .flush({ code: 'INTERNAL' }, { status: 500, statusText: 'Server Error' });
+    f.detectChanges();
+    expect((q(f, 'f-save') as HTMLButtonElement).disabled).toBe(false);
+    const open = vi
+      .spyOn(TestBed.inject(MatDialog), 'open')
+      .mockReturnValue({ afterClosed: () => of(true) } as never);
+    set(f, 'f-amount', '600');
+    submit(f);
+    const data = (open.mock.calls[0][1] as { data: { message: string } }).data;
+    expect(data.message).toBe('REACCEPT-UNKNOWN');
+    ctrl.expectOne('/api/gameyas/g1').flush(null);
+  });
+
+  it('rejects a contribution amount that is not a whole number', () => {
+    const f = setup();
+    fillValid(f);
+    set(f, 'f-amount', '100.5');
+    submit(f);
+    ctrl.expectNone('/api/gameyas');
   });
 });

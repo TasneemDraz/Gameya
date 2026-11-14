@@ -20,7 +20,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { Observable, filter, map, startWith } from 'rxjs';
 import { problemOf } from '../../../core/auth/error.interceptor';
@@ -68,6 +68,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    RouterLink,
     TranslocoPipe,
     MoneyPipe,
     CairoDatePipe,
@@ -78,232 +79,249 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
       {{ (editId ? 'gameyas.form.editTitle' : 'gameyas.form.createTitle') | transloco }}
     </h1>
 
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <section class="section" aria-labelledby="sec-basics">
-        <h2 id="sec-basics">{{ 'gameyas.form.basics' | transloco }}</h2>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.name' | transloco }}</mat-label>
-          <input matInput formControlName="name" data-testid="f-name" />
-          @if (err('name'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
-          }
-        </mat-form-field>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.description' | transloco }}</mat-label>
-          <textarea
-            matInput
-            rows="3"
-            formControlName="description"
-            data-testid="f-description"
-          ></textarea>
-          @if (err('description'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
-          }
-        </mat-form-field>
+    @if (notEditable()) {
+      <section class="notice" role="note" data-testid="not-editable">
+        <p>{{ 'gameyas.form.notEditable' | transloco }}</p>
+        <a mat-stroked-button [routerLink]="['/gameyas', editId]">
+          {{ 'gameyas.form.backToGameya' | transloco }}
+        </a>
       </section>
-
-      <section class="section" aria-labelledby="sec-money">
-        <h2 id="sec-money">{{ 'gameyas.form.money' | transloco }}</h2>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.amount' | transloco }}</mat-label>
-          <input
-            matInput
-            type="number"
-            inputmode="numeric"
-            formControlName="contributionAmount"
-            data-testid="f-amount"
-          />
-          @if (err('contributionAmount'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
-          }
-        </mat-form-field>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.shareCount' | transloco }}</mat-label>
-          <input
-            matInput
-            type="number"
-            inputmode="numeric"
-            formControlName="shareCount"
-            data-testid="f-shareCount"
-          />
-          @if (err('shareCount'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
-          }
-        </mat-form-field>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.frequency' | transloco }}</mat-label>
-          <select matNativeControl formControlName="frequency" data-testid="f-frequency">
-            @for (v of frequencies; track v) {
-              <option [value]="v">{{ 'gameyas.frequency.' + v | transloco }}</option>
-            }
-          </select>
-        </mat-form-field>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.startDate' | transloco }}</mat-label>
-          <input matInput type="date" formControlName="startDate" data-testid="f-startDate" />
-          @if (dueDay(); as d) {
-            <mat-hint data-testid="due-day">
-              {{
-                d.key
-                  | transloco
-                    : { day: d.params['day'], weekday: (d.params['weekday'] + '' | transloco) }
-              }}
-            </mat-hint>
-          }
-          @if (err('startDate'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
-          }
-        </mat-form-field>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.graceDays' | transloco }}</mat-label>
-          <input
-            matInput
-            type="number"
-            inputmode="numeric"
-            formControlName="graceDays"
-            data-testid="f-graceDays"
-          />
-          @if (err('graceDays'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
-          }
-        </mat-form-field>
-      </section>
-
-      <section class="section" aria-labelledby="sec-payout">
-        <h2 id="sec-payout">{{ 'gameyas.form.payout' | transloco }}</h2>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.payoutTiming' | transloco }}</mat-label>
-          <select matNativeControl formControlName="payoutTiming" data-testid="f-payoutTiming">
-            @for (v of timings; track v) {
-              <option [value]="v">{{ 'gameyas.payoutTiming.' + v | transloco }}</option>
-            }
-          </select>
-        </mat-form-field>
-        @if (value().payoutTiming === 'FixedDate') {
+    } @else {
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <section class="section" aria-labelledby="sec-basics">
+          <h2 id="sec-basics">{{ 'gameyas.form.basics' | transloco }}</h2>
           <mat-form-field class="field">
-            <mat-label>{{ 'gameyas.form.payoutOffsetDays' | transloco }}</mat-label>
+            <mat-label>{{ 'gameyas.form.name' | transloco }}</mat-label>
+            <input matInput formControlName="name" data-testid="f-name" />
+            @if (err('name'); as e) {
+              <mat-error>{{ e | transloco }}</mat-error>
+            }
+          </mat-form-field>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.description' | transloco }}</mat-label>
+            <textarea
+              matInput
+              rows="3"
+              formControlName="description"
+              data-testid="f-description"
+            ></textarea>
+            @if (err('description'); as e) {
+              <mat-error>{{ e | transloco }}</mat-error>
+            }
+          </mat-form-field>
+        </section>
+
+        <section class="section" aria-labelledby="sec-money">
+          <h2 id="sec-money">{{ 'gameyas.form.money' | transloco }}</h2>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.amount' | transloco }}</mat-label>
             <input
               matInput
               type="number"
               inputmode="numeric"
-              formControlName="payoutOffsetDays"
-              data-testid="f-payoutOffsetDays"
+              formControlName="contributionAmount"
+              data-testid="f-amount"
             />
-            @if (err('payoutOffsetDays'); as e) {
+            @if (err('contributionAmount'); as e) {
               <mat-error>{{ e | transloco }}</mat-error>
             }
           </mat-form-field>
-        }
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.orderMethod' | transloco }}</mat-label>
-          <select matNativeControl formControlName="orderMethod" data-testid="f-orderMethod">
-            @for (v of orders; track v) {
-              <option [value]="v">{{ 'gameyas.orderMethod.' + v | transloco }}</option>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.shareCount' | transloco }}</mat-label>
+            <input
+              matInput
+              type="number"
+              inputmode="numeric"
+              formControlName="shareCount"
+              data-testid="f-shareCount"
+            />
+            @if (err('shareCount'); as e) {
+              <mat-error>{{ e | transloco }}</mat-error>
             }
-          </select>
-        </mat-form-field>
-      </section>
+          </mat-form-field>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.frequency' | transloco }}</mat-label>
+            <select matNativeControl formControlName="frequency" data-testid="f-frequency">
+              @for (v of frequencies; track v) {
+                <option [value]="v">{{ 'gameyas.frequency.' + v | transloco }}</option>
+              }
+            </select>
+          </mat-form-field>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.startDate' | transloco }}</mat-label>
+            <input matInput type="date" formControlName="startDate" data-testid="f-startDate" />
+            @if (dueDay(); as d) {
+              <mat-hint data-testid="due-day">
+                {{
+                  d.key
+                    | transloco
+                      : { day: d.params['day'], weekday: (d.params['weekday'] + '' | transloco) }
+                }}
+              </mat-hint>
+            }
+            @if (err('startDate'); as e) {
+              <mat-error>{{ e | transloco }}</mat-error>
+            }
+          </mat-form-field>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.graceDays' | transloco }}</mat-label>
+            <input
+              matInput
+              type="number"
+              inputmode="numeric"
+              formControlName="graceDays"
+              data-testid="f-graceDays"
+            />
+            @if (err('graceDays'); as e) {
+              <mat-error>{{ e | transloco }}</mat-error>
+            }
+          </mat-form-field>
+        </section>
 
-      <section class="section" aria-labelledby="sec-members">
-        <h2 id="sec-members">{{ 'gameyas.form.members' | transloco }}</h2>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.maxSharesPerMember' | transloco }}</mat-label>
-          <input
-            matInput
-            type="number"
-            inputmode="numeric"
-            formControlName="maxSharesPerMember"
-            data-testid="f-maxSharesPerMember"
-          />
-          @if (err('maxSharesPerMember'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
+        <section class="section" aria-labelledby="sec-payout">
+          <h2 id="sec-payout">{{ 'gameyas.form.payout' | transloco }}</h2>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.payoutTiming' | transloco }}</mat-label>
+            <select matNativeControl formControlName="payoutTiming" data-testid="f-payoutTiming">
+              @for (v of timings; track v) {
+                <option [value]="v">{{ 'gameyas.payoutTiming.' + v | transloco }}</option>
+              }
+            </select>
+          </mat-form-field>
+          @if (value().payoutTiming === 'FixedDate') {
+            <mat-form-field class="field">
+              <mat-label>{{ 'gameyas.form.payoutOffsetDays' | transloco }}</mat-label>
+              <input
+                matInput
+                type="number"
+                inputmode="numeric"
+                formControlName="payoutOffsetDays"
+                data-testid="f-payoutOffsetDays"
+              />
+              @if (err('payoutOffsetDays'); as e) {
+                <mat-error>{{ e | transloco }}</mat-error>
+              }
+            </mat-form-field>
           }
-        </mat-form-field>
-        <label class="check">
-          <input
-            type="checkbox"
-            formControlName="organizerParticipates"
-            data-testid="f-organizerParticipates"
-          />
-          {{ 'gameyas.form.organizerParticipates' | transloco }}
-        </label>
-        @if (value().organizerParticipates) {
-          <div
-            class="stepper"
-            role="group"
-            [attr.aria-label]="'gameyas.form.organizerShares' | transloco"
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.orderMethod' | transloco }}</mat-label>
+            <select matNativeControl formControlName="orderMethod" data-testid="f-orderMethod">
+              @for (v of orders; track v) {
+                <option [value]="v">{{ 'gameyas.orderMethod.' + v | transloco }}</option>
+              }
+            </select>
+          </mat-form-field>
+        </section>
+
+        <section class="section" aria-labelledby="sec-members">
+          <h2 id="sec-members">{{ 'gameyas.form.members' | transloco }}</h2>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.maxSharesPerMember' | transloco }}</mat-label>
+            <input
+              matInput
+              type="number"
+              inputmode="numeric"
+              formControlName="maxSharesPerMember"
+              data-testid="f-maxSharesPerMember"
+            />
+            @if (err('maxSharesPerMember'); as e) {
+              <mat-error>{{ e | transloco }}</mat-error>
+            }
+          </mat-form-field>
+          <label class="check">
+            <input
+              type="checkbox"
+              formControlName="organizerParticipates"
+              data-testid="f-organizerParticipates"
+            />
+            {{ 'gameyas.form.organizerParticipates' | transloco }}
+          </label>
+          @if (value().organizerParticipates) {
+            <div
+              class="stepper"
+              role="group"
+              [attr.aria-label]="'gameyas.form.organizerShares' | transloco"
+            >
+              <span class="stepper-label">{{ 'gameyas.form.organizerShares' | transloco }}</span>
+              <button
+                mat-icon-button
+                type="button"
+                data-testid="shares-dec"
+                [attr.aria-label]="'gameyas.form.sharesDec' | transloco"
+                [disabled]="myShares() <= 1"
+                (click)="step(-1)"
+              >
+                <mat-icon aria-hidden="true">remove</mat-icon>
+              </button>
+              <output class="stepper-value" data-testid="shares-value">{{ myShares() }}</output>
+              <button
+                mat-icon-button
+                type="button"
+                data-testid="shares-inc"
+                [attr.aria-label]="'gameyas.form.sharesInc' | transloco"
+                [disabled]="myShares() >= maxShares()"
+                (click)="step(1)"
+              >
+                <mat-icon aria-hidden="true">add</mat-icon>
+              </button>
+            </div>
+            @if (err('organizerShares'); as e) {
+              <p class="error" role="alert">{{ e | transloco }}</p>
+            }
+          }
+        </section>
+
+        <section class="section" aria-labelledby="sec-rules">
+          <h2 id="sec-rules">{{ 'gameyas.form.rules' | transloco }}</h2>
+          <mat-form-field class="field">
+            <mat-label>{{ 'gameyas.form.rulesText' | transloco }}</mat-label>
+            <textarea
+              matInput
+              rows="5"
+              formControlName="rulesText"
+              data-testid="f-rulesText"
+            ></textarea>
+            @if (err('rulesText'); as e) {
+              <mat-error>{{ e | transloco }}</mat-error>
+            }
+          </mat-form-field>
+        </section>
+
+        <aside class="calc" aria-live="polite" data-testid="calc-card">
+          @if (calc(); as c) {
+            <dl>
+              <div>
+                <dt>{{ 'gameyas.form.calc.pot' | transloco }}</dt>
+                <dd data-testid="calc-pot">{{ c.pot | money }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'gameyas.form.calc.rounds' | transloco }}</dt>
+                <dd data-testid="calc-rounds">{{ c.rounds }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'gameyas.form.calc.endDate' | transloco }}</dt>
+                <dd data-testid="calc-end">{{ c.end | cairoDate }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'gameyas.form.calc.totalPerShare' | transloco }}</dt>
+                <dd data-testid="calc-total">{{ c.totalPerShare | money }}</dd>
+              </div>
+            </dl>
+          }
+          <button
+            mat-flat-button
+            type="submit"
+            data-testid="f-save"
+            [disabled]="busy() || loading()"
           >
-            <span class="stepper-label">{{ 'gameyas.form.organizerShares' | transloco }}</span>
-            <button
-              mat-icon-button
-              type="button"
-              data-testid="shares-dec"
-              [attr.aria-label]="'gameyas.form.sharesDec' | transloco"
-              [disabled]="myShares() <= 1"
-              (click)="step(-1)"
-            >
-              <mat-icon aria-hidden="true">remove</mat-icon>
-            </button>
-            <output class="stepper-value" data-testid="shares-value">{{ myShares() }}</output>
-            <button
-              mat-icon-button
-              type="button"
-              data-testid="shares-inc"
-              [attr.aria-label]="'gameyas.form.sharesInc' | transloco"
-              [disabled]="myShares() >= maxShares()"
-              (click)="step(1)"
-            >
-              <mat-icon aria-hidden="true">add</mat-icon>
-            </button>
-          </div>
-          @if (err('organizerShares'); as e) {
-            <p class="error" role="alert">{{ e | transloco }}</p>
-          }
+            {{ 'gameyas.form.save' | transloco }}
+          </button>
+        </aside>
+        @if (formError(); as fe) {
+          <p class="error" role="alert" data-testid="form-error">{{ fe }}</p>
         }
-      </section>
-
-      <section class="section" aria-labelledby="sec-rules">
-        <h2 id="sec-rules">{{ 'gameyas.form.rules' | transloco }}</h2>
-        <mat-form-field class="field">
-          <mat-label>{{ 'gameyas.form.rulesText' | transloco }}</mat-label>
-          <textarea
-            matInput
-            rows="5"
-            formControlName="rulesText"
-            data-testid="f-rulesText"
-          ></textarea>
-          @if (err('rulesText'); as e) {
-            <mat-error>{{ e | transloco }}</mat-error>
-          }
-        </mat-form-field>
-      </section>
-
-      <aside class="calc" aria-live="polite" data-testid="calc-card">
-        @if (calc(); as c) {
-          <dl>
-            <div>
-              <dt>{{ 'gameyas.form.calc.pot' | transloco }}</dt>
-              <dd data-testid="calc-pot">{{ c.pot | money }}</dd>
-            </div>
-            <div>
-              <dt>{{ 'gameyas.form.calc.rounds' | transloco }}</dt>
-              <dd data-testid="calc-rounds">{{ c.rounds }}</dd>
-            </div>
-            <div>
-              <dt>{{ 'gameyas.form.calc.endDate' | transloco }}</dt>
-              <dd data-testid="calc-end">{{ c.end | cairoDate }}</dd>
-            </div>
-            <div>
-              <dt>{{ 'gameyas.form.calc.totalPerShare' | transloco }}</dt>
-              <dd data-testid="calc-total">{{ c.totalPerShare | money }}</dd>
-            </div>
-          </dl>
-        }
-        <button mat-flat-button type="submit" data-testid="f-save" [disabled]="busy() || loading()">
-          {{ 'gameyas.form.save' | transloco }}
-        </button>
-      </aside>
-    </form>
+      </form>
+    }
   `,
   styleUrl: './gameya-form.page.scss',
 })
@@ -320,9 +338,12 @@ export class GameyaFormPage {
 
   protected readonly busy = signal(false);
   protected readonly loading = signal(this.editId !== null);
+  protected readonly notEditable = signal(false);
+  protected readonly formError = signal<string | null>(null);
 
   private original: Gameya | null = null;
-  private otherMembers = 0;
+  /** Null when the member list could not be loaded: ask for confirmation without a count. */
+  private otherMembers: number | null = 0;
 
   protected readonly form = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [trimmedLength(3, 60)] }),
@@ -427,6 +448,7 @@ export class GameyaFormPage {
   }
 
   protected submit(): void {
+    this.formError.set(null);
     this.form.markAllAsTouched();
     if (this.form.invalid || this.busy()) return;
     const body = this.body();
@@ -436,16 +458,19 @@ export class GameyaFormPage {
     }
     const id = this.editId;
     const needsConfirm =
-      this.original?.status === 'Recruiting' && this.otherMembers > 0 && this.termsChanged(body);
+      this.original?.status === 'Recruiting' && this.otherMembers !== 0 && this.termsChanged(body);
     if (!needsConfirm) {
       this.send(this.api.update(id, body).pipe(map(() => id)));
       return;
     }
     const data: ConfirmDialogData = {
       title: this.transloco.translate('gameyas.form.reacceptTitle'),
-      message: this.transloco.translate('gameyas.form.reacceptMessage', {
-        count: this.otherMembers,
-      }),
+      message:
+        this.otherMembers === null
+          ? this.transloco.translate('gameyas.form.reacceptMessageUnknown')
+          : this.transloco.translate('gameyas.form.reacceptMessage', {
+              count: this.otherMembers,
+            }),
       confirmLabel: this.transloco.translate('common.confirm'),
       cancelLabel: this.transloco.translate('common.cancel'),
     };
@@ -472,8 +497,18 @@ export class GameyaFormPage {
 
   /** Server errors arrive as flat camelCase keys that match the control names. */
   private showServerErrors(err: unknown): void {
-    const errors = problemOf(err)?.errors;
-    if (!errors) return;
+    const problem = problemOf(err);
+    const errors = problem?.errors;
+    if (!errors) {
+      if (problem?.code) {
+        const key = `errors.${problem.code}`;
+        const text = this.transloco.translate(key, problem.params ?? {});
+        this.formError.set(
+          text && text !== key ? text : this.transloco.translate('gameyas.form.errors.general'),
+        );
+      }
+      return;
+    }
     for (const [key, messages] of Object.entries(errors)) {
       const control = (this.form.controls as Record<string, AbstractControl>)[key];
       if (!control || messages.length === 0) continue;
@@ -567,6 +602,11 @@ export class GameyaFormPage {
   private load(id: string): void {
     this.api.get(id).subscribe((g) => {
       this.original = g;
+      if (g.status !== 'Draft' && g.status !== 'Recruiting') {
+        this.notEditable.set(true);
+        this.loading.set(false);
+        return;
+      }
       this.form.reset({
         name: g.name,
         description: g.description ?? '',
@@ -586,9 +626,15 @@ export class GameyaFormPage {
       this.sync();
       this.form.updateValueAndValidity();
       if (g.status === 'Recruiting') {
-        this.api.members(id).subscribe((members) => {
-          this.otherMembers = members.filter((m) => !m.isOrganizer).length;
-          this.loading.set(false);
+        this.api.members(id).subscribe({
+          next: (members) => {
+            this.otherMembers = members.filter((m) => !m.isOrganizer).length;
+            this.loading.set(false);
+          },
+          error: () => {
+            this.otherMembers = null;
+            this.loading.set(false);
+          },
         });
       } else {
         this.loading.set(false);
