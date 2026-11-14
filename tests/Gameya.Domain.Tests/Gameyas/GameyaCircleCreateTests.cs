@@ -6,35 +6,17 @@ namespace Gameya.Domain.Tests.Gameyas;
 
 public class GameyaCircleCreateTests
 {
-    private static readonly DateOnly Today = new(2026, 11, 14);
-    private static readonly DateTimeOffset Now = new(2026, 11, 14, 10, 0, 0, TimeSpan.Zero);
+    private static readonly DateOnly Today = GameyaTestData.Today;
+    private static readonly DateTimeOffset Now = GameyaTestData.Now;
     private static readonly Guid Id = Guid.NewGuid();
     private static readonly Guid Org = Guid.NewGuid();
 
-    private static GameyaSettings Settings() => new(
-        Name: "Family circle",
-        Description: null,
-        ContributionAmount: 1_000m,
-        ShareCount: 10,
-        Frequency: GameyaFrequency.Monthly,
-        StartDate: Today.AddDays(7),
-        GraceDays: 3,
-        PayoutTiming: PayoutTiming.AfterFullCollection,
-        PayoutOffsetDays: null,
-        OrderMethod: OrderMethod.ByRequest,
-        MaxSharesPerMember: 2,
-        OrganizerParticipates: true,
-        RulesText: null);
+    private static GameyaSettings Settings() => GameyaTestData.Settings();
 
     private static GameyaCircle Create(GameyaSettings? settings = null, int organizerShares = 1) =>
         GameyaCircle.Create(Id, Org, settings ?? Settings(), organizerShares, Today, Now);
 
-    private static DomainException Thrown(Action act, string code)
-    {
-        var ex = Should.Throw<DomainException>(act);
-        ex.Code.ShouldBe(code);
-        return ex;
-    }
+    private static DomainException Thrown(Action act, string code) => GameyaTestData.Thrown(act, code);
 
     private static void FieldFails(GameyaSettings settings, string field, int organizerShares = 1)
     {

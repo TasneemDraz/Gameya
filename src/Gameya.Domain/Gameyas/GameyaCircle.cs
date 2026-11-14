@@ -1,11 +1,17 @@
 using Gameya.Domain.Common;
+using Gameya.Domain.Users;
 
 namespace Gameya.Domain.Gameyas;
 
 // Named GameyaCircle because a type called Gameya would clash with the root namespace.
 public class GameyaCircle : AuditableEntity
 {
+    private const int MaxRejectReasonLength = 500;
+    private const int MaxPreferencesPerShare = 3;
+
     private readonly List<Membership> _memberships = [];
+    private readonly List<JoinRequest> _joinRequests = [];
+    private readonly List<PendingInvite> _pendingInvites = [];
 
     private GameyaCircle()
     {
@@ -35,6 +41,8 @@ public class GameyaCircle : AuditableEntity
     public string? RulesText { get; private set; }
 
     public IReadOnlyCollection<Membership> Memberships => _memberships;
+    public IReadOnlyCollection<JoinRequest> JoinRequests => _joinRequests;
+    public IReadOnlyCollection<PendingInvite> PendingInvites => _pendingInvites;
 
     public decimal Pot => ContributionAmount * ShareCount;
     public int RoundCount => ShareCount;
@@ -48,8 +56,10 @@ public class GameyaCircle : AuditableEntity
         .Where(m => m.Status == MembershipStatus.Active)
         .Sum(m => m.Shares.Count);
 
-    // Task 2 adds invites and join requests, which hold shares without a membership yet.
-    public int ReservedShares => 0;
+    // Pending invites hold shares without a membership; pending join requests hold none until approved.
+    public int ReservedShares => _pendingInvites
+        .Where(i => i.Status == InviteStatus.Pending)
+        .Sum(i => i.ShareCount);
 
     public int AvailableShares => ShareCount - AssignedShares - ReservedShares;
     public bool IsFull => AvailableShares == 0;
@@ -94,6 +104,161 @@ public class GameyaCircle : AuditableEntity
 
         InviteCode = code;
         Raise(new InviteCodeRegenerated(Id));
+    }
+
+    public JoinRequest RequestToJoin(Guid userId, IReadOnlyList<ShareRequest> shares)
+    {
+        RequireRecruiting();
+        if (IsActiveMember(userId))
+            throw new DomainException(ErrorCodes.ALREADY_MEMBER);
+        if (_joinRequests.Any(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending))
+            throw new DomainException(ErrorCodes.REQUEST_ALREADY_PENDING);
+        RequireCapacity(shares.Count);
+        ValidatePreferences(shares);
+
+        var request = JoinRequest.Create(Id, userId, shares, TermsVersion);
+        _joinRequests.Add(request);
+        Raise(new JoinRequested(Id, request.Id, userId, shares.Count));
+        return request;
+    }
+
+    public void WithdrawJoinRequest(Guid userId)
+    {
+        var request = _joinRequests.FirstOrDefault(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending)
+            ?? throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
+
+        request.Withdraw();
+        Raise(new JoinRequestWithdrawn(Id, request.Id));
+    }
+
+    public Membership ApproveJoinRequest(Guid requestId, DateTimeOffset now)
+    {
+        RequireRecruiting();
+        var request = FindPendingRequest(requestId);
+        if (IsActiveMember(request.UserId))
+            throw new DomainException(ErrorCodes.ALREADY_MEMBER);
+        if (request.AcceptedTermsVersion != TermsVersion)
+            throw new DomainException(ErrorCodes.TERMS_NOT_ACCEPTED);
+        RequireCapacity(request.Shares.Count);
+
+        var membership = Membership.Create(
+            Id, request.UserId, [.. request.Shares.Select(s => s.Preferences)], TermsVersion, now);
+        _memberships.Add(membership);
+        request.Approve();
+        Raise(new JoinRequestApproved(Id, request.Id, request.UserId, request.Shares.Count));
+        return membership;
+    }
+
+    public void RejectJoinRequest(Guid requestId, string? reason)
+    {
+        if (reason is { Length: > MaxRejectReasonLength })
+            throw Invalid("reason");
+        var request = FindPendingRequest(requestId);
+
+        request.Reject(reason);
+        Raise(new JoinRequestRejected(Id, request.Id, reason));
+    }
+
+    public PendingInvite InviteByPhone(PhoneNumber phone, Guid? registeredUserId, int shareCount)
+    {
+        RequireRecruiting();
+        if (registeredUserId is { } userId && IsActiveMember(userId))
+            throw new DomainException(ErrorCodes.ALREADY_MEMBER);
+        if (_pendingInvites.Any(i => i.Status == InviteStatus.Pending && i.Phone == phone))
+            throw new DomainException(ErrorCodes.REQUEST_ALREADY_PENDING);
+        RequireCapacity(shareCount);
+
+        var invite = PendingInvite.Create(Id, phone, registeredUserId, shareCount);
+        _pendingInvites.Add(invite);
+        Raise(new MemberInvited(Id, invite.Id, shareCount, registeredUserId));
+        return invite;
+    }
+
+    public void RevokeInvite(Guid inviteId)
+    {
+        var invite = FindPendingInvite(inviteId);
+
+        invite.Revoke();
+        Raise(new InviteRevoked(Id, invite.Id));
+    }
+
+    public Membership AcceptInvite(
+        Guid inviteId, Guid userId, PhoneNumber phone, IReadOnlyList<ShareRequest> shares, DateTimeOffset now)
+    {
+        RequireRecruiting();
+        var invite = FindPendingInvite(inviteId, phone);
+        if (IsActiveMember(userId))
+            throw new DomainException(ErrorCodes.ALREADY_MEMBER);
+        // The invite already reserved its shares, so there is no capacity check here.
+        if (shares.Count != invite.ShareCount)
+            throw new DomainException(ErrorCodes.INVALID_PREFERENCES);
+        ValidatePreferences(shares);
+
+        var membership = Membership.Create(
+            Id, userId, [.. shares.Select(s => s.Preferences)], TermsVersion, now);
+        _memberships.Add(membership);
+        invite.Accept(userId);
+
+        // A still-pending request from this user must not later be approvable into a second membership.
+        foreach (var request in _joinRequests.Where(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending))
+        {
+            request.Withdraw();
+            Raise(new JoinRequestWithdrawn(Id, request.Id));
+        }
+
+        Raise(new InviteAccepted(Id, invite.Id, userId));
+        return membership;
+    }
+
+    public void DeclineInvite(Guid inviteId, Guid userId, PhoneNumber phone)
+    {
+        var invite = FindPendingInvite(inviteId, phone);
+
+        invite.Decline(userId);
+        Raise(new InviteDeclined(Id, invite.Id, userId));
+    }
+
+    private void RequireRecruiting()
+    {
+        if (Status != GameyaStatus.Recruiting)
+            throw new DomainException(ErrorCodes.INVALID_STATUS_TRANSITION);
+    }
+
+    private bool IsActiveMember(Guid userId) =>
+        userId == OrganizerId || _memberships.Any(m => m.UserId == userId && m.Status == MembershipStatus.Active);
+
+    private JoinRequest FindPendingRequest(Guid requestId) =>
+        _joinRequests.FirstOrDefault(r => r.Id == requestId && r.Status == JoinRequestStatus.Pending)
+            ?? throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
+
+    private PendingInvite FindPendingInvite(Guid inviteId, PhoneNumber? phone = null) =>
+        _pendingInvites.FirstOrDefault(i =>
+            i.Id == inviteId && i.Status == InviteStatus.Pending && (phone is null || i.Phone == phone))
+            ?? throw new DomainException(ErrorCodes.INVITE_NOT_FOUND);
+
+    private void RequireCapacity(int shareCount)
+    {
+        if (shareCount < 1)
+            throw Invalid("shareCount");
+        if (shareCount > MaxSharesPerMember)
+            throw new DomainException(ErrorCodes.MAX_SHARES_EXCEEDED);
+        if (AvailableShares == 0)
+            throw new DomainException(ErrorCodes.GAMEYA_FULL);
+        if (shareCount > AvailableShares)
+            throw new DomainException(
+                ErrorCodes.NOT_ENOUGH_SHARES, new Dictionary<string, object?> { ["available"] = AvailableShares });
+    }
+
+    private void ValidatePreferences(IReadOnlyList<ShareRequest> shares)
+    {
+        foreach (var prefs in shares.Select(s => s.Preferences).Where(p => p.Count > 0))
+        {
+            if (OrderMethod != OrderMethod.ByRequest
+                || prefs.Count > MaxPreferencesPerShare
+                || prefs.Distinct().Count() != prefs.Count
+                || prefs.Any(p => p < 1 || p > RoundCount))
+                throw new DomainException(ErrorCodes.INVALID_PREFERENCES);
+        }
     }
 
     private void Apply(GameyaSettings s)

@@ -35,4 +35,12 @@ public class Membership : AuditableEntity
             membership._shares.Add(MemberShare.Create([]));
         return membership;
     }
+
+    internal static Membership Create(
+        Guid gameyaId, Guid userId, IReadOnlyList<IReadOnlyList<int>> preferences, int termsVersion, DateTimeOffset now)
+    {
+        var membership = Create(gameyaId, userId, 0, termsVersion, now);
+        membership._shares.AddRange(preferences.Select(MemberShare.Create));
+        return membership;
+    }
 }
