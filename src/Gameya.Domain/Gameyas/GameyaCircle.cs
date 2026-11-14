@@ -6,7 +6,7 @@ namespace Gameya.Domain.Gameyas;
 // Named GameyaCircle because a type called Gameya would clash with the root namespace.
 public class GameyaCircle : AuditableEntity
 {
-    private const int MaxRejectReasonLength = 500;
+    private const int MaxReasonLength = 500;
     private const int MaxPreferencesPerShare = 3;
 
     private readonly List<Membership> _memberships = [];
@@ -153,7 +153,7 @@ public class GameyaCircle : AuditableEntity
     public void RejectJoinRequest(Guid requestId, string? reason)
     {
         RequireRecruiting();
-        if (reason is { Length: > MaxRejectReasonLength })
+        if (reason is { Length: > MaxReasonLength })
             throw Invalid("reason");
         var request = FindPendingRequest(requestId);
 
@@ -220,6 +220,147 @@ public class GameyaCircle : AuditableEntity
 
         invite.Decline(userId);
         Raise(new InviteDeclined(Id, invite.Id, userId));
+    }
+
+    public void UpdateSettings(GameyaSettings settings, int organizerShares, DateOnly today, DateTimeOffset now)
+    {
+        if (Status is not (GameyaStatus.Draft or GameyaStatus.Recruiting))
+            throw new DomainException(ErrorCodes.INVALID_STATUS_TRANSITION);
+
+        var clean = Validate(settings, organizerShares, today, checkStartDate: settings.StartDate != StartDate);
+
+        var organizer = _memberships.FirstOrDefault(m => m.UserId == OrganizerId && m.Status == MembershipStatus.Active);
+        var oldOrganizerShares = organizer?.Shares.Count ?? 0;
+        var heldByOthers = AssignedShares - oldOrganizerShares + ReservedShares;
+        if (clean.ShareCount < heldByOthers + Math.Min(oldOrganizerShares, organizerShares))
+            throw new DomainException(ErrorCodes.SHARES_BELOW_ASSIGNED);
+        if (heldByOthers + organizerShares > clean.ShareCount)
+            throw new DomainException(ErrorCodes.NOT_ENOUGH_SHARES);
+
+        var changed = SettingsDiff.Build(Snapshot(), oldOrganizerShares, clean, organizerShares);
+        if (changed.Count == 0)
+            return;
+
+        var bump = Status == GameyaStatus.Recruiting
+            && (changed.ContainsKey("contributionAmount") || changed.ContainsKey("shareCount") || changed.ContainsKey("frequency"));
+        Apply(clean);
+        if (bump)
+            TermsVersion++;
+
+        TrimPreferences();
+        ReconcileOrganizer(organizer, organizerShares, now);
+
+        Raise(new GameyaSettingsChanged(Id, changed, bump ? TermsVersion : null));
+    }
+
+    public void ReacceptTerms(Guid userId)
+    {
+        RequireRecruiting();
+        var membership = _memberships.FirstOrDefault(m => m.UserId == userId && m.Status == MembershipStatus.Active);
+        var request = _joinRequests.FirstOrDefault(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending);
+        if (membership is null && request is null)
+            throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
+
+        if (membership is not null)
+        {
+            membership.AcceptTerms(TermsVersion);
+            Raise(new TermsReaccepted(Id, "Membership", membership.Id, userId, TermsVersion));
+        }
+
+        if (request is not null)
+        {
+            request.AcceptTerms(TermsVersion);
+            Raise(new TermsReaccepted(Id, "JoinRequest", request.Id, userId, TermsVersion));
+        }
+    }
+
+    public bool MembershipNeedsReaccept(Guid userId) =>
+        _memberships.Any(m => m.UserId == userId && m.Status == MembershipStatus.Active
+            && m.AcceptedTermsVersion < TermsVersion);
+
+    public void Leave(Guid userId)
+    {
+        RequireRecruiting();
+        if (userId == OrganizerId)
+            throw new DomainException(ErrorCodes.ORGANIZER_CANNOT_LEAVE);
+        var membership = FindActiveMembership(userId);
+
+        membership.Leave();
+        Raise(new MemberLeft(Id, membership.Id, userId));
+    }
+
+    public void RemoveMember(Guid userId, string reason)
+    {
+        RequireRecruiting();
+        if (userId == OrganizerId)
+            throw new DomainException(ErrorCodes.ORGANIZER_CANNOT_LEAVE);
+        var clean = (reason ?? string.Empty).Trim();
+        if (clean.Length is < 5 or > MaxReasonLength)
+            throw Invalid("reason");
+        var membership = FindActiveMembership(userId);
+
+        membership.Remove(clean);
+        Raise(new MemberRemoved(Id, membership.Id, userId, clean));
+    }
+
+    public void Cancel(string? reason, DateTimeOffset now)
+    {
+        if (Status is not (GameyaStatus.Draft or GameyaStatus.Recruiting))
+            throw new DomainException(ErrorCodes.INVALID_STATUS_TRANSITION);
+        if (reason is { Length: > MaxReasonLength })
+            throw Invalid("reason");
+
+        foreach (var request in _joinRequests.Where(r => r.Status == JoinRequestStatus.Pending))
+            request.Reject(null);
+        foreach (var invite in _pendingInvites.Where(i => i.Status == InviteStatus.Pending))
+            invite.Revoke();
+
+        // InviteCode is kept on purpose so the cancelled preview stays reachable.
+        Status = GameyaStatus.Cancelled;
+        CancelReason = reason;
+        CancelledAt = now;
+        Raise(new GameyaCancelled(Id, reason));
+    }
+
+    private Membership FindActiveMembership(Guid userId) =>
+        _memberships.FirstOrDefault(m => m.UserId == userId && m.Status == MembershipStatus.Active)
+            ?? throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
+
+    private GameyaSettings Snapshot() => new(
+        Name, Description, ContributionAmount, ShareCount, Frequency, StartDate, GraceDays, PayoutTiming,
+        PayoutOffsetDays, OrderMethod, MaxSharesPerMember, OrganizerParticipates, RulesText);
+
+    // A shrunken round count or a non-ByRequest order method invalidates previously stored preferences.
+    private void TrimPreferences()
+    {
+        IReadOnlyList<int> Keep(IReadOnlyList<int> prefs) =>
+            OrderMethod == OrderMethod.ByRequest ? [.. prefs.Where(p => p <= RoundCount)] : [];
+
+        foreach (var share in _memberships.Where(m => m.Status == MembershipStatus.Active).SelectMany(m => m.Shares))
+            share.SetPreferences(Keep(share.Preferences));
+        foreach (var share in _joinRequests.Where(r => r.Status == JoinRequestStatus.Pending).SelectMany(r => r.Shares))
+            share.SetPreferences(Keep(share.Preferences));
+    }
+
+    private void ReconcileOrganizer(Membership? organizer, int organizerShares, DateTimeOffset now)
+    {
+        if (organizerShares == 0)
+        {
+            organizer?.Leave();
+            return;
+        }
+
+        if (organizer is null)
+        {
+            _memberships.Add(Membership.Create(Id, OrganizerId, organizerShares, TermsVersion, now));
+            return;
+        }
+
+        if (organizerShares > organizer.Shares.Count)
+            organizer.AddShares(organizerShares - organizer.Shares.Count);
+        else if (organizerShares < organizer.Shares.Count)
+            organizer.RemoveLastShares(organizer.Shares.Count - organizerShares);
+        organizer.AcceptTerms(TermsVersion);
     }
 
     private void RequireRecruiting()

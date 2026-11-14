@@ -122,3 +122,63 @@ public sealed record InviteDeclined(Guid GameyaId, Guid InviteId, Guid UserId) :
     public Guid? ActorUserIdOverride => null;
     public string? Note => null;
 }
+
+public sealed record GameyaSettingsChanged(
+    Guid GameyaId, IReadOnlyDictionary<string, object?> Changed, int? TermsVersion) : IActivityEvent
+{
+    public string Action => "GAMEYA_SETTINGS_CHANGED";
+    Guid? IActivityEvent.GameyaId => GameyaId;
+    public string TargetType => "Gameya";
+    public string TargetId => GameyaId.ToString();
+
+    public object? Details => TermsVersion is { } version
+        ? new Dictionary<string, object?> { ["changed"] = Changed, ["termsVersion"] = version }
+        : new Dictionary<string, object?> { ["changed"] = Changed };
+
+    public Guid? ActorUserIdOverride => null;
+    public string? Note => null;
+}
+
+public sealed record TermsReaccepted(
+    Guid GameyaId, string TargetType, Guid ItemId, Guid UserId, int TermsVersion) : IActivityEvent
+{
+    public string Action => "TERMS_REACCEPTED";
+    Guid? IActivityEvent.GameyaId => GameyaId;
+    public string TargetId => ItemId.ToString();
+    public object? Details => new { userId = UserId, termsVersion = TermsVersion };
+    public Guid? ActorUserIdOverride => null;
+    public string? Note => null;
+}
+
+public sealed record MemberLeft(Guid GameyaId, Guid MembershipId, Guid UserId) : IActivityEvent
+{
+    public string Action => "MEMBER_LEFT";
+    Guid? IActivityEvent.GameyaId => GameyaId;
+    public string TargetType => "Membership";
+    public string TargetId => MembershipId.ToString();
+    public object? Details => new { userId = UserId };
+    public Guid? ActorUserIdOverride => null;
+    public string? Note => null;
+}
+
+public sealed record MemberRemoved(Guid GameyaId, Guid MembershipId, Guid UserId, string Reason) : IActivityEvent
+{
+    public string Action => "MEMBER_REMOVED";
+    Guid? IActivityEvent.GameyaId => GameyaId;
+    public string TargetType => "Membership";
+    public string TargetId => MembershipId.ToString();
+    public object? Details => new { userId = UserId };
+    public Guid? ActorUserIdOverride => null;
+    public string? Note => Reason;
+}
+
+public sealed record GameyaCancelled(Guid GameyaId, string? Reason) : IActivityEvent
+{
+    public string Action => "GAMEYA_CANCELLED";
+    Guid? IActivityEvent.GameyaId => GameyaId;
+    public string TargetType => "Gameya";
+    public string TargetId => GameyaId.ToString();
+    public object? Details => null;
+    public Guid? ActorUserIdOverride => null;
+    public string? Note => Reason;
+}

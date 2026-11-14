@@ -11,6 +11,8 @@ public class MemberShare : AuditableEntity
     public Guid Id { get; private set; }
     public IReadOnlyList<int> Preferences { get; private set; } = [];
 
+    internal void SetPreferences(IReadOnlyList<int> preferences) => Preferences = [.. preferences];
+
     internal static MemberShare Create(IReadOnlyList<int> preferences) =>
         new() { Id = Guid.CreateVersion7(), Preferences = [.. preferences] };
 }

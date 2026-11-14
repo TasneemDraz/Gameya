@@ -33,6 +33,8 @@ public class JoinRequest : AuditableEntity
         return request;
     }
 
+    internal void AcceptTerms(int termsVersion) => AcceptedTermsVersion = termsVersion;
+
     internal void Withdraw() => Status = JoinRequestStatus.Withdrawn;
 
     internal void Approve() => Status = JoinRequestStatus.Approved;

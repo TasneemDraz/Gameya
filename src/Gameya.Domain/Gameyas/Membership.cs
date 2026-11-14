@@ -43,4 +43,22 @@ public class Membership : AuditableEntity
         membership._shares.AddRange(preferences.Select(MemberShare.Create));
         return membership;
     }
+
+    internal void AcceptTerms(int termsVersion) => AcceptedTermsVersion = termsVersion;
+
+    internal void Leave() => Status = MembershipStatus.Left;
+
+    internal void Remove(string reason)
+    {
+        Status = MembershipStatus.Removed;
+        RemovalReason = reason;
+    }
+
+    internal void AddShares(int count)
+    {
+        for (var i = 0; i < count; i++)
+            _shares.Add(MemberShare.Create([]));
+    }
+
+    internal void RemoveLastShares(int count) => _shares.RemoveRange(_shares.Count - count, count);
 }
