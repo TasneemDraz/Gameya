@@ -356,6 +356,8 @@
     "rulesTitle": "Rules",
     "join": {
       "shares": "Number of shares",
+      "fewer": "Fewer shares",
+      "more": "More shares",
       "preferences": "Preferred turns (up to 3)",
       "noPreference": "No preference",
       "round": "Turn {{n}}",

@@ -57,6 +57,12 @@ export const routes: Routes = [
           import('./features/gameyas/form/gameya-form.page').then((m) => m.GameyaFormPage),
       },
       {
+        path: 'gameyas/invites/:inviteId/accept',
+        canActivate: [profileCompleteGuard],
+        loadComponent: () =>
+          import('./features/gameyas/join/accept-invite.page').then((m) => m.AcceptInvitePage),
+      },
+      {
         path: 'gameyas/:id',
         canActivate: [profileCompleteGuard],
         loadComponent: () =>
