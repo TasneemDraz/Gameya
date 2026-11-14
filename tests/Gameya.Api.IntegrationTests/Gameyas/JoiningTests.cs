@@ -304,6 +304,44 @@ public sealed class JoiningTests : IDisposable
     }
 
     [Fact]
+    public async Task Outsider_withdrawing_on_a_cancelled_gameya_gets_404()
+    {
+        var (id, _) = await RecruitingAsync();
+        await Ok(await _organizer.PostAsJsonAsync($"/api/gameyas/{id}/cancel", new { reason = (string?)null }));
+        var (stranger, _) = await UserAsync();
+
+        await ShouldFailWith(
+            await stranger.DeleteAsync($"/api/gameyas/{id}/join-requests/mine"),
+            HttpStatusCode.NotFound, ErrorCodes.GAMEYA_NOT_FOUND);
+        await ShouldFailWith(
+            await stranger.PostAsync($"/api/gameyas/{id}/reaccept", null),
+            HttpStatusCode.NotFound, ErrorCodes.GAMEYA_NOT_FOUND);
+    }
+
+    [Fact]
+    public async Task Accepting_someone_elses_invite_is_404_INVITE_NOT_FOUND()
+    {
+        var (id, _) = await RecruitingAsync();
+        var invitedPhone = TestApi.NewPhone();
+        var (invited, _) = await UserAsync(invitedPhone);
+        var (other, otherId) = await UserAsync();
+        var inviteId = await InviteAsync(id, invitedPhone, shareCount: 1);
+
+        await ShouldFailWith(
+            await AcceptAsync(other, inviteId, shares: 1), HttpStatusCode.NotFound, ErrorCodes.INVITE_NOT_FOUND);
+
+        await using (var ctx = _db.CreateAppContext())
+        {
+            var stored = await LoadAsync(ctx, id);
+            stored.PendingInvites.Single(i => i.Id == inviteId).Status.ShouldBe(InviteStatus.Pending);
+            stored.Memberships.ShouldNotContain(m => m.UserId == otherId);
+        }
+
+        // The intended invitee can still accept it.
+        await Ok(await AcceptAsync(invited, inviteId, shares: 1));
+    }
+
+    [Fact]
     public async Task Leave_and_remove()
     {
         var (id, code) = await RecruitingAsync();

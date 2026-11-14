@@ -319,7 +319,9 @@ public class GameyaCircleLifecycleTests
         var g = Draft();
         Thrown(() => g.Leave(U), ErrorCodes.INVALID_STATUS_TRANSITION);
         Thrown(() => g.RemoveMember(U, "valid reason"), ErrorCodes.INVALID_STATUS_TRANSITION);
-        Thrown(() => g.ReacceptTerms(U), ErrorCodes.INVALID_STATUS_TRANSITION);
+        // ReacceptTerms checks ownership first, so the status error needs a caller who holds a membership.
+        Thrown(() => g.ReacceptTerms(Org), ErrorCodes.INVALID_STATUS_TRANSITION);
+        Thrown(() => g.ReacceptTerms(U), ErrorCodes.GAMEYA_NOT_FOUND);
     }
 
     [Fact]

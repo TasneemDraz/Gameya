@@ -274,8 +274,7 @@ public class GameyaCircleJoiningTests
 
     public static TheoryData<string> JoiningOperations() =>
     [
-        "RequestToJoin", "WithdrawJoinRequest", "ApproveJoinRequest", "RejectJoinRequest",
-        "InviteByPhone", "RevokeInvite", "AcceptInvite", "DeclineInvite",
+        "RequestToJoin", "ApproveJoinRequest", "RejectJoinRequest", "InviteByPhone", "RevokeInvite",
     ];
 
     [Theory]
@@ -288,13 +287,10 @@ public class GameyaCircleJoiningTests
         Action act = operation switch
         {
             "RequestToJoin" => () => draft.RequestToJoin(U, [Share()]),
-            "WithdrawJoinRequest" => () => draft.WithdrawJoinRequest(U),
             "ApproveJoinRequest" => () => draft.ApproveJoinRequest(id, Now),
             "RejectJoinRequest" => () => draft.RejectJoinRequest(id, null),
             "InviteByPhone" => () => draft.InviteByPhone(P, null, 1),
             "RevokeInvite" => () => draft.RevokeInvite(id),
-            "AcceptInvite" => () => draft.AcceptInvite(id, U, P, [Share()], Now),
-            "DeclineInvite" => () => draft.DeclineInvite(id, U, P),
             _ => throw new ArgumentOutOfRangeException(nameof(operation)),
         };
 
@@ -317,5 +313,67 @@ public class GameyaCircleJoiningTests
         g.AvailableShares.ShouldBe(9);
         g.DomainEvents.OfType<InviteDeclined>().ShouldHaveSingleItem();
         g.DomainEvents.OfType<InviteRevoked>().ShouldHaveSingleItem();
+    }
+    /// <summary>
+    /// Forces a status the public API cannot reach yet while live children remain (Active comes with the start
+    /// in sub-project 3, and Cancel clears pending requests and invites), to prove the owner-side ordering.
+    /// </summary>
+    private static void ForceStatus(GameyaCircle g, GameyaStatus status) =>
+        typeof(GameyaCircle).GetProperty(nameof(GameyaCircle.Status))!.SetValue(g, status);
+
+    private static GameyaCircle Cancelled()
+    {
+        var g = Recruiting();
+        g.Cancel(null, Now);
+        return g;
+    }
+
+    [Fact]
+    public void Outsider_on_a_non_Recruiting_gameya_gets_not_found_not_its_status()
+    {
+        var stranger = Guid.NewGuid();
+        var draft = GameyaCircle.Create(
+            Guid.NewGuid(), Org, GameyaTestData.Settings(), 1, GameyaTestData.Today, Now);
+
+        foreach (var g in new[] { draft, Cancelled() })
+        {
+            Thrown(() => g.WithdrawJoinRequest(stranger), ErrorCodes.GAMEYA_NOT_FOUND);
+            Thrown(() => g.ReacceptTerms(stranger), ErrorCodes.GAMEYA_NOT_FOUND);
+            Thrown(() => g.AcceptInvite(Guid.NewGuid(), stranger, P, [Share()], Now), ErrorCodes.INVITE_NOT_FOUND);
+            Thrown(() => g.DeclineInvite(Guid.NewGuid(), stranger, P), ErrorCodes.INVITE_NOT_FOUND);
+        }
+    }
+
+    [Fact]
+    public void Invite_of_a_cancelled_gameya_is_not_found_for_its_invitee()
+    {
+        var g = Recruiting();
+        var invite = g.InviteByPhone(P, null, 1);
+        g.Cancel(null, Now);
+
+        Thrown(() => g.AcceptInvite(invite.Id, U, P, [Share()], Now), ErrorCodes.INVITE_NOT_FOUND);
+        Thrown(() => g.DeclineInvite(invite.Id, U, P), ErrorCodes.INVITE_NOT_FOUND);
+    }
+
+    [Fact]
+    public void Owner_on_a_non_Recruiting_gameya_still_gets_INVALID_STATUS_TRANSITION()
+    {
+        var g = Recruiting();
+        var requester = Guid.NewGuid();
+        g.RequestToJoin(requester, [Share()]);
+        var invite = g.InviteByPhone(P, null, 1);
+        ForceStatus(g, GameyaStatus.Active);
+
+        Thrown(() => g.WithdrawJoinRequest(requester), ErrorCodes.INVALID_STATUS_TRANSITION);
+        Thrown(() => g.ReacceptTerms(requester), ErrorCodes.INVALID_STATUS_TRANSITION);
+        Thrown(() => g.AcceptInvite(invite.Id, U, P, [Share()], Now), ErrorCodes.INVALID_STATUS_TRANSITION);
+        Thrown(() => g.DeclineInvite(invite.Id, U, P), ErrorCodes.INVALID_STATUS_TRANSITION);
+
+        // Reachable today: a member (and the organizer) of a cancelled gam'eya.
+        var cancelled = Recruiting();
+        cancelled.ApproveJoinRequest(cancelled.RequestToJoin(U, [Share()]).Id, Now);
+        cancelled.Cancel(null, Now);
+        Thrown(() => cancelled.ReacceptTerms(U), ErrorCodes.INVALID_STATUS_TRANSITION);
+        Thrown(() => cancelled.ReacceptTerms(Org), ErrorCodes.INVALID_STATUS_TRANSITION);
     }
 }

@@ -124,9 +124,10 @@ public class GameyaCircle : AuditableEntity
 
     public void WithdrawJoinRequest(Guid userId)
     {
-        RequireRecruiting();
+        // Ownership before status: a stranger must not learn that the gam'eya exists or what state it is in.
         var request = _joinRequests.FirstOrDefault(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending)
             ?? throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
+        RequireRecruiting();
 
         request.Withdraw();
         Raise(new JoinRequestWithdrawn(Id, request.Id));
@@ -188,8 +189,9 @@ public class GameyaCircle : AuditableEntity
     public Membership AcceptInvite(
         Guid inviteId, Guid userId, PhoneNumber phone, IReadOnlyList<ShareRequest> shares, DateTimeOffset now)
     {
-        RequireRecruiting();
+        // The invite and phone match first, so an unrelated invite id reveals nothing about its gam'eya.
         var invite = FindPendingInvite(inviteId, phone);
+        RequireRecruiting();
         if (IsActiveMember(userId))
             throw new DomainException(ErrorCodes.ALREADY_MEMBER);
         // The invite already reserved its shares, so there is no capacity check here.
@@ -215,8 +217,8 @@ public class GameyaCircle : AuditableEntity
 
     public void DeclineInvite(Guid inviteId, Guid userId, PhoneNumber phone)
     {
-        RequireRecruiting();
         var invite = FindPendingInvite(inviteId, phone);
+        RequireRecruiting();
 
         invite.Decline(userId);
         Raise(new InviteDeclined(Id, invite.Id, userId));
@@ -255,11 +257,12 @@ public class GameyaCircle : AuditableEntity
 
     public void ReacceptTerms(Guid userId)
     {
-        RequireRecruiting();
+        // Ownership before status, as in WithdrawJoinRequest.
         var membership = _memberships.FirstOrDefault(m => m.UserId == userId && m.Status == MembershipStatus.Active);
         var request = _joinRequests.FirstOrDefault(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending);
         if (membership is null && request is null)
             throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
+        RequireRecruiting();
 
         if (membership is not null)
         {
