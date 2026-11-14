@@ -148,6 +148,37 @@ public class GameyaCircleLifecycleTests
     }
 
     [Fact]
+    public void Switching_away_from_ByRequest_clears_preferences_and_logs_the_method()
+    {
+        var g = Recruiting();
+        var m = Join(g, U, Share(2));
+        var r = g.RequestToJoin(Guid.NewGuid(), [Share(3)]);
+
+        g.UpdateSettings(GameyaTestData.Settings() with { OrderMethod = OrderMethod.RandomDraw }, 1, Today, Now);
+
+        m.Shares[0].Preferences.ShouldBeEmpty();
+        r.Shares[0].Preferences.ShouldBeEmpty();
+        var change = Details(g)["changed"]!["orderMethod"]!;
+        change["old"]!.GetValue<string>().ShouldBe("ByRequest");
+        change["new"]!.GetValue<string>().ShouldBe("RandomDraw");
+    }
+
+    [Fact]
+    public void Unrelated_change_leaves_preference_lists_untouched()
+    {
+        var g = Recruiting();
+        var m = Join(g, U, Share(2, 5));
+        var r = g.RequestToJoin(Guid.NewGuid(), [Share(3)]);
+        var memberPrefs = m.Shares[0].Preferences;
+        var requestPrefs = r.Shares[0].Preferences;
+
+        g.UpdateSettings(GameyaTestData.Settings() with { Name = "Renamed circle" }, 1, Today, Now);
+
+        m.Shares[0].Preferences.ShouldBeSameAs(memberPrefs);
+        r.Shares[0].Preferences.ShouldBeSameAs(requestPrefs);
+    }
+
+    [Fact]
     public void Unchanged_past_start_date_is_allowed_but_a_changed_one_must_be_today_or_later()
     {
         var s = GameyaTestData.Settings() with { StartDate = Today };

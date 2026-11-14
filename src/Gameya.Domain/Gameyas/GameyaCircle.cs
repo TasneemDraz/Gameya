@@ -333,13 +333,19 @@ public class GameyaCircle : AuditableEntity
     // A shrunken round count or a non-ByRequest order method invalidates previously stored preferences.
     private void TrimPreferences()
     {
-        IReadOnlyList<int> Keep(IReadOnlyList<int> prefs) =>
-            OrderMethod == OrderMethod.ByRequest ? [.. prefs.Where(p => p <= RoundCount)] : [];
+        // Returns null when nothing needs to change, so untouched shares are not marked modified.
+        IReadOnlyList<int>? Trimmed(IReadOnlyList<int> prefs)
+        {
+            var kept = OrderMethod == OrderMethod.ByRequest ? prefs.Where(p => p <= RoundCount).ToList() : [];
+            return kept.Count == prefs.Count ? null : kept;
+        }
 
         foreach (var share in _memberships.Where(m => m.Status == MembershipStatus.Active).SelectMany(m => m.Shares))
-            share.SetPreferences(Keep(share.Preferences));
+            if (Trimmed(share.Preferences) is { } kept)
+                share.SetPreferences(kept);
         foreach (var share in _joinRequests.Where(r => r.Status == JoinRequestStatus.Pending).SelectMany(r => r.Shares))
-            share.SetPreferences(Keep(share.Preferences));
+            if (Trimmed(share.Preferences) is { } kept)
+                share.SetPreferences(kept);
     }
 
     private void ReconcileOrganizer(Membership? organizer, int organizerShares, DateTimeOffset now)
