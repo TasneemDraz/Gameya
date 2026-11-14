@@ -64,6 +64,8 @@ public sealed class MembershipConfiguration : IEntityTypeConfiguration<Membershi
         builder.HasMany(m => m.Shares).WithOne().HasForeignKey("MembershipId").IsRequired().OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(m => new { m.GameyaId, m.UserId }).IsUnique().HasFilter("[status] = 'Active'");
+        // The filtered unique index cannot serve loads of all rows of a gam'eya, so gameya_id gets its own.
+        builder.HasIndex(m => m.GameyaId);
         builder.HasIndex(m => m.UserId);
     }
 }
@@ -99,6 +101,7 @@ public sealed class JoinRequestConfiguration : IEntityTypeConfiguration<JoinRequ
         builder.HasMany(r => r.Shares).WithOne().HasForeignKey("JoinRequestId").IsRequired().OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(r => new { r.GameyaId, r.UserId }).IsUnique().HasFilter("[status] = 'Pending'");
+        builder.HasIndex(r => r.GameyaId);
     }
 }
 
@@ -132,6 +135,7 @@ public sealed class PendingInviteConfiguration : IEntityTypeConfiguration<Pendin
         builder.HasOne<User>().WithMany().HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(i => new { i.GameyaId, i.Phone }).IsUnique().HasFilter("[status] = 'Pending'");
+        builder.HasIndex(i => i.GameyaId);
         builder.HasIndex(i => i.Phone);
     }
 }

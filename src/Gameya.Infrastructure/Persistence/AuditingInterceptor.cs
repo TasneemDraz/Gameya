@@ -57,7 +57,11 @@ public sealed class AuditingInterceptor(IClock clock, ICurrentUser? currentUser)
                      e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted
                      && ChildTypes.Contains(e.Metadata.ClrType)))
         {
-            if (FindRoot(entries, entry) is { State: EntityState.Unchanged or EntityState.Modified } root)
+            // Without the tracked root there is no row-version check, so the change must not be saved.
+            var root = FindRoot(entries, entry) ?? throw new InvalidOperationException(
+                $"A {entry.Metadata.ClrType.Name} was changed without its GameyaCircle being tracked. "
+                + "Aggregate children must be changed through a tracked GameyaCircle.");
+            if (root.State is EntityState.Unchanged or EntityState.Modified)
                 Touch(root, now, actor);
         }
     }

@@ -128,6 +128,35 @@ public sealed class GameyaPersistenceTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task Changing_a_child_without_its_tracked_root_throws()
+    {
+        var organizer = NewUser();
+        var requester = NewUser();
+        var gameya = Recruiting(organizer.Id);
+        var request = gameya.RequestToJoin(requester.Id, OneShare());
+        await SeedAsync(gameya, organizer, requester);
+
+        // Without the root in the change tracker the row-version check cannot guard the change.
+        await using (var ctx = db.CreateAppContext())
+        {
+            var membership = await ctx.Memberships.SingleAsync(m => m.GameyaId == gameya.Id);
+            ctx.Entry(membership).Property(m => m.Status).CurrentValue = MembershipStatus.Left;
+            await Should.ThrowAsync<InvalidOperationException>(() => ctx.SaveChangesAsync());
+        }
+
+        await using (var ctx = db.CreateAppContext())
+        {
+            var stored = await ctx.JoinRequests.SingleAsync(r => r.Id == request.Id);
+            ctx.Entry(stored).Property(r => r.Status).CurrentValue = JoinRequestStatus.Withdrawn;
+            await Should.ThrowAsync<InvalidOperationException>(() => ctx.SaveChangesAsync());
+        }
+
+        await using var read = db.CreateAppContext();
+        (await read.Memberships.SingleAsync(m => m.GameyaId == gameya.Id)).Status.ShouldBe(MembershipStatus.Active);
+        (await read.JoinRequests.SingleAsync(r => r.Id == request.Id)).Status.ShouldBe(JoinRequestStatus.Pending);
+    }
+
+    [Fact]
     public async Task Existing_users_keep_created_at()
     {
         // A database at the migration before AddGameyas, holding a user, is upgraded to the latest schema.

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -232,6 +232,11 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                 column: "join_request_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_join_requests_gameya_id",
+                table: "join_requests",
+                column: "gameya_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_join_requests_gameya_id_user_id",
                 table: "join_requests",
                 columns: new[] { "gameya_id", "user_id" },
@@ -249,6 +254,11 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                 column: "membership_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_memberships_gameya_id",
+                table: "memberships",
+                column: "gameya_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_memberships_gameya_id_user_id",
                 table: "memberships",
                 columns: new[] { "gameya_id", "user_id" },
@@ -259,6 +269,11 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                 name: "ix_memberships_user_id",
                 table: "memberships",
                 column: "user_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_pending_invites_gameya_id",
+                table: "pending_invites",
+                column: "gameya_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_pending_invites_gameya_id_phone",
