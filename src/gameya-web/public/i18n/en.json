@@ -5,7 +5,8 @@
     "navigation": "Main navigation"
   },
   "nav": {
-    "home": "Home"
+    "home": "Home",
+    "profile": "Profile"
   },
   "common": {
     "otherLanguage": "العربية",

@@ -4,7 +4,7 @@ export type GameyaFrequency = 'Monthly' | 'Weekly';
 export type PayoutTiming = 'AfterFullCollection' | 'FixedDate';
 export type OrderMethod = 'Manual' | 'RandomDraw' | 'ByRequest';
 export type GameyaRole = 'None' | 'Member' | 'Organizer';
-export type InvitePreviewState = 'Recruiting' | 'Cancelled' | 'Full';
+export type InvitePreviewState = 'Open' | 'Cancelled' | 'Full';
 export type InviteRelationship = 'None' | 'Member' | 'RequestPending' | 'Organizer';
 
 /** Dates are `yyyy-MM-dd`; timestamps are ISO 8601. */

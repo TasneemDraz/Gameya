@@ -5,7 +5,8 @@
     "navigation": "التنقل الرئيسي"
   },
   "nav": {
-    "home": "الرئيسية"
+    "home": "الرئيسية",
+    "profile": "حسابي"
   },
   "common": {
     "otherLanguage": "English",

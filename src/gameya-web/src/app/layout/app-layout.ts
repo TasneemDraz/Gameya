@@ -47,6 +47,15 @@ const WIDE_QUERY = '(min-width: 960px)';
               <mat-icon>home</mat-icon>
               {{ 'nav.home' | transloco }}
             </a>
+            <a
+              mat-button
+              routerLink="/profile"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: false }"
+            >
+              <mat-icon>person</mat-icon>
+              {{ 'nav.profile' | transloco }}
+            </a>
           </nav>
         </mat-sidenav>
         <mat-sidenav-content class="content"><router-outlet /></mat-sidenav-content>
@@ -61,6 +70,14 @@ const WIDE_QUERY = '(min-width: 960px)';
         >
           <mat-icon>home</mat-icon>
           <span>{{ 'nav.home' | transloco }}</span>
+        </a>
+        <a
+          routerLink="/profile"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: false }"
+        >
+          <mat-icon>person</mat-icon>
+          <span>{{ 'nav.profile' | transloco }}</span>
         </a>
       </nav>
     }
