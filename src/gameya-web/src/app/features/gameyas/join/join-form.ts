@@ -57,7 +57,9 @@ const blankShare = (): number[] => SLOTS.map(() => 0);
       @if (orderMethod() === 'ByRequest') {
         @for (share of shareIndexes(); track share) {
           <fieldset class="prefs" data-testid="preferences">
-            <legend>{{ 'invite.join.preferences' | transloco }}</legend>
+            <legend>
+              {{ ('invite.join.preferences' | transloco) + ' (' + (share + 1) + ')' }}
+            </legend>
             @for (slot of slots; track slot) {
               <select
                 class="pref"

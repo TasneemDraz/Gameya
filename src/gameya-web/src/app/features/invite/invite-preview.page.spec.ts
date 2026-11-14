@@ -27,8 +27,18 @@ const texts = {
     withdraw: 'WITHDRAW',
     reaccept: 'REACCEPT',
     rulesTitle: 'RULES',
-    join: { shares: 'SHARES', submit: 'SUBMIT' },
+    loadFailed: 'LOADFAILED',
+    join: {
+      shares: 'SHARES',
+      fewer: 'FEWER',
+      more: 'MORE',
+      preferences: 'PREFS',
+      acceptRules: 'RULES',
+      acceptNoMoney: 'NOMONEY',
+      submit: 'SUBMIT',
+    },
   },
+  common: { retry: 'RETRY' },
   gameyas: { page: { noMoneyNotice: 'NOMONEY' }, amountTimesShares: '{{amount}} x {{shares}}' },
 };
 
@@ -60,7 +70,7 @@ const preview = (over: Partial<InvitePreview> = {}): InvitePreview => ({
 describe('InvitePreviewPage', () => {
   let ctrl: HttpTestingController;
 
-  function setup(response: InvitePreview | 404): ComponentFixture<InvitePreviewPage> {
+  function setup(response: InvitePreview | 404 | 429): ComponentFixture<InvitePreviewPage> {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       imports: [
@@ -86,6 +96,8 @@ describe('InvitePreviewPage', () => {
     const req = ctrl.expectOne('/api/invite/ABC234');
     if (response === 404) {
       req.flush({ code: 'INVITE_CODE_INVALID' }, { status: 404, statusText: 'Not Found' });
+    } else if (response === 429) {
+      req.flush(null, { status: 429, statusText: 'Too Many Requests' });
     } else {
       req.flush(response);
     }
@@ -135,9 +147,62 @@ describe('InvitePreviewPage', () => {
     expect(link.getAttribute('href')).toBe('/gameyas/g1');
   });
 
-  it('a pending request can be withdrawn and offers re-accept when terms changed', () => {
+  it('a 429 shows the retry state, not the invalid state, and retry fetches again', () => {
+    const f = setup(429);
+    expect(q(f, 'state-failed')).not.toBeNull();
+    expect(q(f, 'state-invalid')).toBeNull();
+    q(f, 'retry')!.click();
+    ctrl.expectOne('/api/invite/ABC234').flush(preview());
+    f.detectChanges();
+    expect(q(f, 'state-failed')).toBeNull();
+    expect(q(f, 'gameya-name')).not.toBeNull();
+  });
+
+  it('a 404 still shows invalid', () => {
+    const f = setup(404);
+    expect(q(f, 'state-invalid')).not.toBeNull();
+    expect(q(f, 'state-failed')).toBeNull();
+  });
+
+  it('a failed reload after an action keeps the preview on screen', () => {
+    const f = setup(preview({ relationship: 'RequestPending' }));
+    q(f, 'withdraw')!.click();
+    ctrl.expectOne('/api/gameyas/g1/join-requests/mine').flush(null);
+    ctrl.expectOne('/api/invite/ABC234').flush(null, { status: 500, statusText: 'Server Error' });
+    f.detectChanges();
+    expect(q(f, 'state-failed')).toBeNull();
+    expect(q(f, 'state-invalid')).toBeNull();
+    expect(q(f, 'gameya-name')).not.toBeNull();
+  });
+
+  it('submitting the join form posts to the join endpoint with the body', () => {
+    const f = setup(preview({ relationship: 'None' }));
+    q(f, 'accept-rules')!.querySelector('input')!.click();
+    q(f, 'accept-no-money')!.querySelector('input')!.click();
+    f.detectChanges();
+    q(f, 'join-submit')!.click();
+    const req = ctrl.expectOne('/api/invite/ABC234/join');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      shares: [{ preferences: [] }],
+      acceptRules: true,
+      acceptNoMoney: true,
+    });
+    req.flush(null);
+    ctrl.expectOne('/api/invite/ABC234').flush(preview({ relationship: 'RequestPending' }));
+  });
+
+  it('re-accept posts to the reaccept endpoint', () => {
     const f = setup(preview({ relationship: 'RequestPending', requestNeedsReaccept: true }));
-    expect(q(f, 'reaccept')).not.toBeNull();
+    q(f, 'reaccept')!.click();
+    const req = ctrl.expectOne('/api/gameyas/g1/reaccept');
+    expect(req.request.method).toBe('POST');
+    req.flush(null);
+    ctrl.expectOne('/api/invite/ABC234').flush(preview({ relationship: 'RequestPending' }));
+  });
+
+  it('a pending request can be withdrawn', () => {
+    const f = setup(preview({ relationship: 'RequestPending' }));
     q(f, 'withdraw')!.click();
     ctrl.expectOne('/api/gameyas/g1/join-requests/mine').flush(null);
     ctrl.expectOne('/api/invite/ABC234').flush(preview({ relationship: 'None' }));

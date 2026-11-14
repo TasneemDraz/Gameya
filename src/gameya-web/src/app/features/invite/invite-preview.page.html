@@ -5,6 +5,14 @@
       <p>{{ 'invite.invalidBody' | transloco }}</p>
     </section>
   }
+  @case ('failed') {
+    <section class="state" data-testid="state-failed" role="alert">
+      <p>{{ 'invite.loadFailed' | transloco }}</p>
+      <button mat-stroked-button type="button" data-testid="retry" (click)="retry()">
+        {{ 'common.retry' | transloco }}
+      </button>
+    </section>
+  }
   @case ('cancelled') {
     <section class="state" data-testid="state-cancelled">
       <h1 class="title">{{ 'invite.cancelled' | transloco }}</h1>

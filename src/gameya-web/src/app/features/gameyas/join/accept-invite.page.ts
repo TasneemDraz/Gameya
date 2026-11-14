@@ -16,6 +16,9 @@ type LoadState = 'loading' | 'ready' | 'missing';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @switch (state()) {
+      @case ('loading') {
+        <p data-testid="loading" role="status">{{ 'common.loading' | transloco }}</p>
+      }
       @case ('ready') {
         @let inv = invite()!;
         <h1 class="title">{{ 'invite.title' | transloco }}</h1>

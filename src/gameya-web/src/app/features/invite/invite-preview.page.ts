@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { CairoDatePipe } from '../../core/format/cairo-date.pipe';
@@ -9,7 +10,14 @@ import { GameyaApi } from '../gameyas/gameya.api';
 import { InvitePreview } from '../gameyas/gameya.models';
 import { JoinForm, JoinSubmission } from '../gameyas/join/join-form';
 
-type View = 'loading' | 'invalid' | 'cancelled' | 'member' | 'pending' | 'full' | 'open';
+type View = 'loading' | 'failed' | 'invalid' | 'cancelled' | 'member' | 'pending' | 'full' | 'open';
+
+function isInvalidCode(err: unknown): boolean {
+  return (
+    err instanceof HttpErrorResponse &&
+    (err.status === 404 || err.error?.code === 'INVITE_CODE_INVALID')
+  );
+}
 
 /** Public `/j/:code`. Shows the terms and the organizer's name only, never member data. */
 @Component({
@@ -27,12 +35,14 @@ export class InvitePreviewPage {
 
   protected readonly preview = signal<InvitePreview | null>(null);
   protected readonly invalid = signal(false);
+  protected readonly loadFailed = signal(false);
   protected readonly busy = signal(false);
 
   protected readonly loginQuery = { returnUrl: `/j/${this.code}` };
 
   protected readonly view = computed<View>(() => {
     if (this.invalid()) return 'invalid';
+    if (this.loadFailed()) return 'failed';
     const p = this.preview();
     if (!p) return 'loading';
     if (p.state === 'Cancelled') return 'cancelled';
@@ -58,11 +68,24 @@ export class InvitePreviewPage {
       next: (p) => {
         this.preview.set(p);
         this.invalid.set(false);
+        this.loadFailed.set(false);
       },
-      // Unknown, replaced and malformed codes are all 404 INVITE_CODE_INVALID. Other failures are transient
-      // but also leave nothing to show, so the page treats them the same way.
-      error: () => this.invalid.set(true),
+      error: (err: unknown) => {
+        // Only a 404 / INVITE_CODE_INVALID means the link is bad (unknown, replaced and malformed codes look
+        // the same). A rate limit, a server error or a network failure says nothing about the link: offer a
+        // retry, and when a reload after join/withdraw/re-accept fails keep the preview already on screen.
+        if (isInvalidCode(err)) {
+          this.invalid.set(true);
+        } else if (!this.preview()) {
+          this.loadFailed.set(true);
+        }
+      },
     });
+  }
+
+  protected retry(): void {
+    this.loadFailed.set(false);
+    this.load();
   }
 
   protected join(body: JoinSubmission): void {

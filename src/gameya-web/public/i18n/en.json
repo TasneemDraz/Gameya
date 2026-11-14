@@ -338,6 +338,7 @@
   },
   "invite": {
     "title": "You are invited",
+    "loadFailed": "We could not load this invite. Check your connection and try again.",
     "organizer": "Organized by {{name}}",
     "available": "Shares available: {{count}}",
     "login": "Log in to join",
