@@ -249,6 +249,8 @@
         "endDate": "Last due date",
         "totalPerShare": "Total paid per share"
       },
+      "sharesInc": "More shares",
+      "sharesDec": "Fewer shares",
       "save": "Save",
       "reacceptTitle": "Members must accept again",
       "reacceptMessage": "{{count}} member(s) will be asked to accept the new terms. Continue?",
@@ -257,7 +259,10 @@
         "min": "The value is too small.",
         "max": "The value is too large.",
         "minlength": "This is too short.",
-        "maxlength": "This is too long."
+        "maxlength": "This is too long.",
+        "integer": "Enter a whole number.",
+        "pastDate": "The date cannot be in the past.",
+        "server": "This value is not accepted."
       }
     },
     "page": {

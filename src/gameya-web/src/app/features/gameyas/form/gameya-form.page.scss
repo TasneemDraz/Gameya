@@ -1,0 +1,83 @@
+:host {
+  display: block;
+}
+
+.title {
+  margin-block: 0 16px;
+  font-size: 1.5rem;
+}
+
+.section {
+  margin-block-end: 24px;
+}
+
+.section h2 {
+  margin-block: 0 8px;
+  font-size: 1.125rem;
+}
+
+.field {
+  display: block;
+  inline-size: 100%;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 12px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepper-label {
+  flex: 1;
+}
+
+.stepper-value {
+  min-inline-size: 2ch;
+  font-size: 1.125rem;
+  text-align: center;
+}
+
+.error {
+  margin: 0;
+  color: var(--gy-danger-fg, #9c1c1c);
+  font-size: 0.875rem;
+}
+
+.calc {
+  padding: 16px;
+  background: var(--gy-surface-nav, #fff);
+  border: 1px solid var(--gy-outline, #c4c7c5);
+  border-radius: 12px;
+}
+
+.calc dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.calc dt {
+  font-size: 0.875rem;
+}
+
+.calc dd {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+@media (width < 600px) {
+  .calc {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 1;
+  }
+}
