@@ -89,7 +89,8 @@ public sealed class ProblemDetailsMapping(ILogger<ProblemDetailsMapping> logger)
         ErrorCodes.ACCOUNT_HAS_ACTIVE_GAMEYAS or ErrorCodes.EMAIL_IN_USE or ErrorCodes.INVALID_STATUS_TRANSITION
             or ErrorCodes.NOT_ENOUGH_SHARES or ErrorCodes.SHARES_BELOW_ASSIGNED or ErrorCodes.TERMS_NOT_ACCEPTED
             or ErrorCodes.GAMEYA_FULL or ErrorCodes.ALREADY_MEMBER or ErrorCodes.REQUEST_ALREADY_PENDING
-            or ErrorCodes.ORGANIZER_CANNOT_LEAVE or ErrorCodes.CONCURRENCY_CONFLICT => StatusCodes.Status409Conflict,
+            or ErrorCodes.ORGANIZER_CANNOT_LEAVE or ErrorCodes.CONCURRENCY_CONFLICT
+            or ErrorCodes.INVITEE_REQUEST_PENDING or ErrorCodes.REQUESTER_ACCOUNT_DELETED => StatusCodes.Status409Conflict,
         ErrorCodes.SMS_SEND_FAILED => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status400BadRequest
     };

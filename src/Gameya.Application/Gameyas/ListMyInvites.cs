@@ -23,7 +23,7 @@ public sealed class ListMyInvitesHandler(IAppDbContext db, ICurrentUser currentU
             return [];
         }
 
-        var rows = await db.Gameyas.ListAsync(new MyInviteRowsSpec(card.Phone), cancellationToken);
+        var rows = await db.Gameyas.ListAsync(new MyInviteRowsSpec(userId, card.Phone), cancellationToken);
         var organizers = await UserCards.LoadAsync(db, rows.Select(r => r.OrganizerId), cancellationToken);
 
         return

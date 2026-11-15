@@ -1,4 +1,6 @@
+using Gameya.Application.Common;
 using Gameya.Application.Gameyas;
+using Gameya.Domain.Common;
 using Gameya.Domain.Gameyas;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +9,10 @@ namespace Gameya.Api.Endpoints;
 
 public static class GameyaEndpoints
 {
-    /// <summary>The settings fields plus the organizer's own share count, as the create and edit forms send them.</summary>
+    /// <summary>
+    /// The settings fields plus the organizer's own share count, as the create and edit forms send them. A missing
+    /// frequency, payout timing, grace days or maximum shares takes the form's default; the order method has none.
+    /// </summary>
     public sealed record GameyaSettingsBody(
         string? Name,
         string? Description,
@@ -15,15 +20,18 @@ public static class GameyaEndpoints
         int ShareCount,
         GameyaFrequency? Frequency,
         DateOnly StartDate,
-        int GraceDays,
+        int? GraceDays,
         PayoutTiming? PayoutTiming,
         int? PayoutOffsetDays,
-        OrderMethod OrderMethod,
-        int MaxSharesPerMember,
+        OrderMethod? OrderMethod,
+        int? MaxSharesPerMember,
         bool OrganizerParticipates,
         string? RulesText,
         int OrganizerShares)
     {
+        public const int DefaultGraceDays = 3;
+        public const int DefaultMaxSharesPerMember = 2;
+
         public GameyaSettings ToSettings() => new(
             Name ?? string.Empty,
             Description,
@@ -31,11 +39,12 @@ public static class GameyaEndpoints
             ShareCount,
             Frequency ?? GameyaFrequency.Monthly,
             StartDate,
-            GraceDays,
+            GraceDays ?? DefaultGraceDays,
             PayoutTiming ?? Domain.Gameyas.PayoutTiming.AfterFullCollection,
             PayoutOffsetDays,
-            OrderMethod,
-            MaxSharesPerMember,
+            OrderMethod ?? throw new ValidationFailedException(
+                new Dictionary<string, string[]> { ["orderMethod"] = [ErrorCodes.VALIDATION_FAILED] }),
+            MaxSharesPerMember ?? DefaultMaxSharesPerMember,
             OrganizerParticipates,
             RulesText);
     }

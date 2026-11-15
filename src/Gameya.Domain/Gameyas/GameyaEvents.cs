@@ -79,13 +79,14 @@ public sealed record JoinRequestRejected(Guid GameyaId, Guid RequestId, string? 
     public string? Note => Reason;
 }
 
-public sealed record MemberInvited(Guid GameyaId, Guid InviteId, int ShareCount, Guid? RegisteredUserId) : IActivityEvent
+/// <summary>Carries no user id: whether the typed phone has an account is not the organizer's to learn.</summary>
+public sealed record MemberInvited(Guid GameyaId, Guid InviteId, int ShareCount) : IActivityEvent
 {
     public string Action => "MEMBER_INVITED";
     Guid? IActivityEvent.GameyaId => GameyaId;
     public string TargetType => "PendingInvite";
     public string TargetId => InviteId.ToString();
-    public object? Details => new { inviteId = InviteId, shareCount = ShareCount, registeredUserId = RegisteredUserId };
+    public object? Details => new { inviteId = InviteId, shareCount = ShareCount };
     public Guid? ActorUserIdOverride => null;
     public string? Note => null;
 }
@@ -112,13 +113,14 @@ public sealed record InviteAccepted(Guid GameyaId, Guid InviteId, Guid UserId) :
     public string? Note => null;
 }
 
+/// <summary>The decliner never joined, so the details leave out who they are.</summary>
 public sealed record InviteDeclined(Guid GameyaId, Guid InviteId, Guid UserId) : IActivityEvent
 {
     public string Action => "INVITE_DECLINED";
     Guid? IActivityEvent.GameyaId => GameyaId;
     public string TargetType => "PendingInvite";
     public string TargetId => InviteId.ToString();
-    public object? Details => new { inviteId = InviteId, userId = UserId };
+    public object? Details => new { inviteId = InviteId };
     public Guid? ActorUserIdOverride => null;
     public string? Note => null;
 }

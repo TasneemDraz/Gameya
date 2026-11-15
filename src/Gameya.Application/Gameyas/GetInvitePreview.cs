@@ -37,6 +37,9 @@ public sealed class GetInvitePreviewHandler(IAppDbContext db, ICurrentUser curre
         // Only the organizer's name is public; it is looked up by id and never with a phone.
         var cards = await UserCards.LoadAsync(db, [row.OrganizerId], cancellationToken);
         var available = row.ShareCount - row.AssignedShares - row.ReservedShares;
+        var inviteId = viewerId is { } viewer && row.OrganizerId != viewer && !row.ViewerIsMember
+            ? await ViewerInviteAsync(row.Id, viewer, cancellationToken)
+            : null;
 
         return new InvitePreviewDto(
             row.Id,
@@ -58,8 +61,22 @@ public sealed class GetInvitePreviewHandler(IAppDbContext db, ICurrentUser curre
             available,
             row.RulesText,
             cards.NameOf(row.OrganizerId),
-            viewerId is { } id ? Relationship(row, id) : null,
-            viewerId is not null && row.ViewerRequestTermsVersion is { } accepted && accepted < row.TermsVersion);
+            viewerId is { } id ? Relationship(row, id, inviteId) : null,
+            viewerId is not null && row.ViewerRequestTermsVersion is { } accepted && accepted < row.TermsVersion,
+            inviteId);
+    }
+
+    /// <summary>The viewer's own Pending direct invite, matched by user id or by their phone.</summary>
+    private async Task<Guid?> ViewerInviteAsync(Guid gameyaId, Guid viewerId, CancellationToken ct)
+    {
+        var me = await UserCards.LoadAsync(db, [viewerId], ct);
+        if (!me.TryGetValue(viewerId, out var card) || card.Phone is null)
+        {
+            return null;
+        }
+
+        var ids = await db.PendingInvites.ListAsync(new ViewerPendingInviteSpec(gameyaId, viewerId, card.Phone), ct);
+        return ids.Count > 0 ? ids[0] : null;
     }
 
     /// <summary>Open while recruiting with a free share; Cancelled once cancelled; otherwise not joinable (Full).</summary>
@@ -70,7 +87,11 @@ public sealed class GetInvitePreviewHandler(IAppDbContext db, ICurrentUser curre
         _ => "Full",
     };
 
-    private static string Relationship(InvitePreviewRow row, Guid viewerId)
+    /// <summary>
+    /// An invited viewer is pointed to their invite (which already holds their shares) rather than the join form, even
+    /// when they also have a request pending.
+    /// </summary>
+    private static string Relationship(InvitePreviewRow row, Guid viewerId, Guid? inviteId)
     {
         if (row.OrganizerId == viewerId)
         {
@@ -80,6 +101,11 @@ public sealed class GetInvitePreviewHandler(IAppDbContext db, ICurrentUser curre
         if (row.ViewerIsMember)
         {
             return "Member";
+        }
+
+        if (inviteId is not null)
+        {
+            return "Invited";
         }
 
         return row.ViewerRequestTermsVersion is null ? "None" : "RequestPending";

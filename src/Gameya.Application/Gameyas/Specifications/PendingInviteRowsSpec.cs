@@ -4,7 +4,8 @@ using Gameya.Domain.Users;
 
 namespace Gameya.Application.Gameyas.Specifications;
 
-public sealed record PendingInviteRow(Guid Id, PhoneNumber Phone, int ShareCount, Guid? UserId);
+/// <summary>No user id: the organizer's list must not reveal whether a phone has an account.</summary>
+public sealed record PendingInviteRow(Guid Id, PhoneNumber Phone, int ShareCount);
 
 /// <summary>Pending direct invites of a gam'eya, oldest first.</summary>
 public sealed class PendingInviteRowsSpec : Specification<PendingInvite, PendingInviteRow>
@@ -14,5 +15,5 @@ public sealed class PendingInviteRowsSpec : Specification<PendingInvite, Pending
             .Where(i => i.GameyaId == gameyaId && i.Status == InviteStatus.Pending)
             .OrderBy(i => i.CreatedAt)
             .ThenBy(i => i.Id)
-            .Select(i => new PendingInviteRow(i.Id, i.Phone, i.ShareCount, i.UserId));
+            .Select(i => new PendingInviteRow(i.Id, i.Phone, i.ShareCount));
 }

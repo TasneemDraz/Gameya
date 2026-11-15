@@ -15,14 +15,16 @@ public sealed record MyInviteRow(
     Guid OrganizerId);
 
 /// <summary>
-/// Pending invites to the phone in Recruiting gam'eyas. A filtered unique index allows at most one pending invite per
-/// phone and gam'eya, so each gam'eya yields one row.
+/// Pending invites to the phone in Recruiting gam'eyas the user does not already organize or belong to. A filtered
+/// unique index allows at most one pending invite per phone and gam'eya, so each gam'eya yields one row.
 /// </summary>
 public sealed class MyInviteRowsSpec : Specification<GameyaCircle, MyInviteRow>
 {
-    public MyInviteRowsSpec(PhoneNumber phone) =>
+    public MyInviteRowsSpec(Guid userId, PhoneNumber phone) =>
         Query
             .Where(g => g.Status == GameyaStatus.Recruiting
+                && g.OrganizerId != userId
+                && !g.Memberships.Any(m => m.UserId == userId && m.Status == MembershipStatus.Active)
                 && g.PendingInvites.Any(i => i.Status == InviteStatus.Pending && i.Phone == phone))
             .OrderBy(g => g.Name)
             .Select(g => new MyInviteRow(

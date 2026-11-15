@@ -137,20 +137,36 @@ public class GameyaCircle : AuditableEntity
         Raise(new JoinRequestWithdrawn(Id, request.Id));
     }
 
-    public Membership ApproveJoinRequest(Guid requestId, DateTimeOffset now)
+    /// <param name="requesterPhone">
+    /// The requester's phone, so an invite sent to it before they signed up (with no user id) is revoked too.
+    /// </param>
+    /// <param name="requesterDeleted">True when the requester has deleted their account since asking.</param>
+    public Membership ApproveJoinRequest(
+        Guid requestId, DateTimeOffset now, PhoneNumber? requesterPhone = null, bool requesterDeleted = false)
     {
         RequireRecruiting();
         var request = FindPendingRequest(requestId);
+        if (requesterDeleted)
+            throw new DomainException(ErrorCodes.REQUESTER_ACCOUNT_DELETED);
         if (IsActiveMember(request.UserId))
             throw new DomainException(ErrorCodes.ALREADY_MEMBER);
         if (request.AcceptedTermsVersion != TermsVersion)
             throw new DomainException(ErrorCodes.TERMS_NOT_ACCEPTED);
-        RequireCapacity(request.Shares.Count);
+
+        // The same person's pending direct invite is replaced by this membership, so its reserved shares count as free.
+        var ownInvites = PendingInvitesFor(request.UserId, requesterPhone).ToList();
+        RequireCapacity(request.Shares.Count, released: ownInvites.Sum(i => i.ShareCount));
 
         var membership = Membership.Create(
             Id, request.UserId, [.. request.Shares.Select(s => s.Preferences)], TermsVersion, now);
         _memberships.Add(membership);
         request.Approve();
+        foreach (var invite in ownInvites)
+        {
+            invite.Revoke();
+            Raise(new InviteRevoked(Id, invite.Id));
+        }
+
         Raise(new JoinRequestApproved(Id, request.Id, request.UserId, request.Shares.Count));
         return membership;
     }
@@ -158,12 +174,13 @@ public class GameyaCircle : AuditableEntity
     public void RejectJoinRequest(Guid requestId, string? reason)
     {
         RequireRecruiting();
-        if (reason is { Length: > MaxReasonLength })
+        var clean = CleanReason(reason);
+        if (clean is { Length: > MaxReasonLength })
             throw Invalid("reason");
         var request = FindPendingRequest(requestId);
 
-        request.Reject(reason);
-        Raise(new JoinRequestRejected(Id, request.Id, reason));
+        request.Reject(clean);
+        Raise(new JoinRequestRejected(Id, request.Id, clean));
     }
 
     public PendingInvite InviteByPhone(PhoneNumber phone, Guid? registeredUserId, int shareCount)
@@ -173,11 +190,15 @@ public class GameyaCircle : AuditableEntity
             throw new DomainException(ErrorCodes.ALREADY_MEMBER);
         if (_pendingInvites.Any(i => i.Status == InviteStatus.Pending && i.Phone == phone))
             throw new DomainException(ErrorCodes.REQUEST_ALREADY_PENDING);
+        // Their own request is already waiting for the organizer, who should answer that instead.
+        if (registeredUserId is { } requester
+            && _joinRequests.Any(r => r.UserId == requester && r.Status == JoinRequestStatus.Pending))
+            throw new DomainException(ErrorCodes.INVITEE_REQUEST_PENDING);
         RequireCapacity(shareCount);
 
         var invite = PendingInvite.Create(Id, phone, registeredUserId, shareCount);
         _pendingInvites.Add(invite);
-        Raise(new MemberInvited(Id, invite.Id, shareCount, registeredUserId));
+        Raise(new MemberInvited(Id, invite.Id, shareCount));
         return invite;
     }
 
@@ -226,6 +247,25 @@ public class GameyaCircle : AuditableEntity
 
         invite.Decline(userId);
         Raise(new InviteDeclined(Id, invite.Id, userId));
+    }
+
+    /// <summary>
+    /// The user deleted their account: their Pending requests are withdrawn and the invites waiting for them (by user
+    /// id, or by phone when sent before signup) are declined, whatever the gam'eya's status.
+    /// </summary>
+    public void ReleaseDeletedAccount(Guid userId, PhoneNumber? phone)
+    {
+        foreach (var request in _joinRequests.Where(r => r.UserId == userId && r.Status == JoinRequestStatus.Pending))
+        {
+            request.Withdraw();
+            Raise(new JoinRequestWithdrawn(Id, request.Id));
+        }
+
+        foreach (var invite in PendingInvitesFor(userId, phone).ToList())
+        {
+            invite.Decline(userId);
+            Raise(new InviteDeclined(Id, invite.Id, userId));
+        }
     }
 
     public void UpdateSettings(GameyaSettings settings, int organizerShares, DateOnly today, DateTimeOffset now)
@@ -301,7 +341,7 @@ public class GameyaCircle : AuditableEntity
         RequireRecruiting();
         if (userId == OrganizerId)
             throw new DomainException(ErrorCodes.ORGANIZER_CANNOT_LEAVE);
-        var clean = (reason ?? string.Empty).Trim();
+        var clean = CleanReason(reason) ?? string.Empty;
         if (clean.Length is < 5 or > MaxReasonLength)
             throw Invalid("reason");
         var membership = FindActiveMembership(userId);
@@ -314,6 +354,7 @@ public class GameyaCircle : AuditableEntity
     {
         if (Status is not (GameyaStatus.Draft or GameyaStatus.Recruiting))
             throw new DomainException(ErrorCodes.INVALID_STATUS_TRANSITION);
+        reason = CleanReason(reason);
         if (reason is { Length: > MaxReasonLength })
             throw Invalid("reason");
 
@@ -394,18 +435,30 @@ public class GameyaCircle : AuditableEntity
             i.Id == inviteId && i.Status == InviteStatus.Pending && (phone is null || i.Phone == phone))
             ?? throw new DomainException(ErrorCodes.INVITE_NOT_FOUND);
 
-    private void RequireCapacity(int shareCount)
+    /// <param name="shareCount">The shares asked for.</param>
+    /// <param name="released">Reserved shares the same operation frees, counted as available.</param>
+    private void RequireCapacity(int shareCount, int released = 0)
     {
+        var available = AvailableShares + released;
         if (shareCount < 1)
             throw Invalid("shareCount");
         if (shareCount > MaxSharesPerMember)
             throw new DomainException(ErrorCodes.MAX_SHARES_EXCEEDED);
-        if (AvailableShares == 0)
+        if (available == 0)
             throw new DomainException(ErrorCodes.GAMEYA_FULL);
-        if (shareCount > AvailableShares)
+        if (shareCount > available)
             throw new DomainException(
-                ErrorCodes.NOT_ENOUGH_SHARES, new Dictionary<string, object?> { ["available"] = AvailableShares });
+                ErrorCodes.NOT_ENOUGH_SHARES, new Dictionary<string, object?> { ["available"] = available });
     }
+
+    /// <summary>Pending invites meant for this user: by user id, or by phone for one sent before they signed up.</summary>
+    private IEnumerable<PendingInvite> PendingInvitesFor(Guid userId, PhoneNumber? phone) =>
+        _pendingInvites.Where(i => i.Status == InviteStatus.Pending
+            && (i.UserId == userId || (i.UserId is null && phone is not null && i.Phone == phone)));
+
+    /// <summary>Trimmed, with a blank reason stored as none.</summary>
+    private static string? CleanReason(string? reason) =>
+        string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
 
     private void ValidatePreferences(IReadOnlyList<ShareRequest> shares)
     {

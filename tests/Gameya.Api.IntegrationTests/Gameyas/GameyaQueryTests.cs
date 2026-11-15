@@ -376,7 +376,7 @@ public sealed class GameyaQueryTests : IDisposable
         var invite = (await GetJsonAsync(_organizer, $"/api/gameyas/{id}/invites")).EnumerateArray().ShouldHaveSingleItem();
         invite.GetProperty("phone").GetString().ShouldBe(invitedPhone.E164);
         invite.GetProperty("shareCount").GetInt32().ShouldBe(1);
-        invite.GetProperty("registeredName").ValueKind.ShouldBe(JsonValueKind.Null);
+        invite.TryGetProperty("registeredName", out _).ShouldBeFalse();
         await ShouldFailWith(
             await member.GetAsync($"/api/gameyas/{id}/invites"), HttpStatusCode.NotFound, ErrorCodes.GAMEYA_NOT_FOUND);
 

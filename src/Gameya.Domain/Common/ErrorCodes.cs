@@ -40,4 +40,6 @@ public static class ErrorCodes
     public const string ORGANIZER_CANNOT_LEAVE = "ORGANIZER_CANNOT_LEAVE";
     public const string START_DATE_IN_PAST = "START_DATE_IN_PAST";
     public const string INVALID_PREFERENCES = "INVALID_PREFERENCES";
+    public const string INVITEE_REQUEST_PENDING = "INVITEE_REQUEST_PENDING";
+    public const string REQUESTER_ACCOUNT_DELETED = "REQUESTER_ACCOUNT_DELETED";
 }

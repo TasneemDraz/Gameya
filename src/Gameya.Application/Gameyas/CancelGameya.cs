@@ -14,7 +14,9 @@ public sealed record CancelGameyaCommand(Guid GameyaId, string? Reason) : IComma
 public sealed class CancelGameyaValidator : AbstractValidator<CancelGameyaCommand>
 {
     public CancelGameyaValidator() =>
-        RuleFor(c => c.Reason).MaximumLength(500).WithErrorCode(ErrorCodes.VALIDATION_FAILED).OverridePropertyName("reason");
+        // Measured as stored: the domain trims the reason and keeps a blank one as none.
+        RuleFor(c => c.Reason).Must(r => (r?.Trim().Length ?? 0) <= 500)
+            .WithErrorCode(ErrorCodes.VALIDATION_FAILED).OverridePropertyName("reason");
 }
 
 public sealed class CancelGameyaHandler(IAppDbContext db, IClock clock) : IRequestHandler<CancelGameyaCommand, Unit>
@@ -24,7 +26,7 @@ public sealed class CancelGameyaHandler(IAppDbContext db, IClock clock) : IReque
         var gameya = await db.Gameyas.FirstOrDefaultAsync(new GameyaAggregateByIdSpec(request.GameyaId), cancellationToken)
             ?? throw new DomainException(ErrorCodes.GAMEYA_NOT_FOUND);
 
-        gameya.Cancel(string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim(), clock.UtcNow);
+        gameya.Cancel(request.Reason, clock.UtcNow);
         return Unit.Value;
     }
 }

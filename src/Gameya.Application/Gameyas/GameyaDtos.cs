@@ -6,7 +6,8 @@ namespace Gameya.Application.Gameyas;
 
 /// <summary>
 /// The public invite page. It never carries member names, phones or user ids; <see cref="Relationship"/> is null for
-/// an anonymous visitor.
+/// an anonymous visitor. <see cref="InviteId"/> is the viewer's own pending direct invite, set only when
+/// <see cref="Relationship"/> is "Invited".
 /// </summary>
 public sealed record InvitePreviewDto(
     Guid GameyaId,
@@ -29,7 +30,8 @@ public sealed record InvitePreviewDto(
     string? RulesText,
     string? OrganizerName,
     string? Relationship,
-    bool RequestNeedsReaccept);
+    bool RequestNeedsReaccept,
+    Guid? InviteId);
 
 public sealed record MyGameyaDto(
     Guid Id,
@@ -112,4 +114,18 @@ public sealed record JoinRequestDto(
     IReadOnlyList<IReadOnlyList<int>> SharePreferences,
     bool TermsCurrent);
 
-public sealed record PendingInviteDto(Guid Id, DisplayPhone Phone, int ShareCount, string? RegisteredName);
+/// <summary>
+/// A pending direct invite: only the phone the organizer typed. Whether it belongs to an account, and whose, is not
+/// shown until the invite is accepted.
+/// </summary>
+public sealed record PendingInviteDto(Guid Id, DisplayPhone Phone, int ShareCount);
+
+/// <summary>The caller's own Pending request to join, for the home page.</summary>
+public sealed record MyJoinRequestDto(
+    Guid GameyaId,
+    string Name,
+    JoinRequestStatus Status,
+    decimal ContributionAmount,
+    int GameyaShareCount,
+    int ShareCount,
+    bool NeedsReaccept);

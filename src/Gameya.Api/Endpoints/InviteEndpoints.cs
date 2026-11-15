@@ -5,7 +5,10 @@ using MediatR;
 
 namespace Gameya.Api.Endpoints;
 
-/// <summary>The public invite preview, joining through the code, and the caller's own direct invites.</summary>
+/// <summary>
+/// The public invite preview, joining through the code, the caller's own join requests and the caller's own direct
+/// invites.
+/// </summary>
 public static class InviteEndpoints
 {
     public sealed record ShareBody(IReadOnlyList<int>? Preferences);
@@ -24,11 +27,16 @@ public static class InviteEndpoints
                 Results.Ok(await sender.Send(new GetInvitePreviewQuery(code), ct)))
             .RequireRateLimiting(RateLimiting.InvitePreviewPolicy);
 
+        // Joining answers INVITE_CODE_INVALID for an unknown code too, so it shares the preview's per-IP limit.
         app.MapPost("/api/invite/{code}/join", async (string code, JoinBody body, ISender sender, CancellationToken ct) =>
-        {
-            await sender.Send(new RequestToJoinCommand(code, body.ToShares(), body.AcceptRules, body.AcceptNoMoney), ct);
-            return Results.NoContent();
-        });
+            {
+                await sender.Send(new RequestToJoinCommand(code, body.ToShares(), body.AcceptRules, body.AcceptNoMoney), ct);
+                return Results.NoContent();
+            })
+            .RequireRateLimiting(RateLimiting.InvitePreviewPolicy);
+
+        app.MapGet("/api/me/join-requests", async (ISender sender, CancellationToken ct) =>
+            Results.Ok(await sender.Send(new ListMyJoinRequestsQuery(), ct)));
 
         var mine = app.MapGroup("/api/me/invites");
 
