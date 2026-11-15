@@ -79,7 +79,14 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
       {{ (editId ? 'gameyas.form.editTitle' : 'gameyas.form.createTitle') | transloco }}
     </h1>
 
-    @if (notEditable()) {
+    @if (loadFailed()) {
+      <section class="notice" role="alert" data-testid="load-failed">
+        <p>{{ 'gameyas.form.loadFailed' | transloco }}</p>
+        <button mat-stroked-button type="button" data-testid="retry" (click)="retry()">
+          {{ 'common.retry' | transloco }}
+        </button>
+      </section>
+    } @else if (notEditable()) {
       <section class="notice" role="note" data-testid="not-editable">
         <p>{{ 'gameyas.form.notEditable' | transloco }}</p>
         <a mat-stroked-button [routerLink]="['/gameyas', editId]">
@@ -339,6 +346,7 @@ export class GameyaFormPage {
   protected readonly busy = signal(false);
   protected readonly loading = signal(this.editId !== null);
   protected readonly notEditable = signal(false);
+  protected readonly loadFailed = signal(false);
   protected readonly formError = signal<string | null>(null);
 
   private original: Gameya | null = null;
@@ -597,46 +605,61 @@ export class GameyaFormPage {
     return m !== null && m >= 1 && m <= 5 ? m : 5;
   }
 
+  protected retry(): void {
+    if (!this.editId) return;
+    this.loadFailed.set(false);
+    this.load(this.editId);
+  }
+
   private load(id: string): void {
-    this.api.get(id).subscribe((g) => {
-      this.original = g;
-      if (g.status !== 'Draft' && g.status !== 'Recruiting') {
-        this.notEditable.set(true);
+    this.api.get(id).subscribe({
+      next: (g) => this.loaded(id, g),
+      // The global interceptor explains the error; the page offers a retry instead of loading forever.
+      error: () => {
         this.loading.set(false);
-        return;
-      }
-      this.form.reset({
-        name: g.name,
-        description: g.description ?? '',
-        contributionAmount: g.contributionAmount,
-        shareCount: g.shareCount,
-        frequency: g.frequency,
-        startDate: g.startDate,
-        graceDays: g.graceDays,
-        payoutTiming: g.payoutTiming,
-        payoutOffsetDays: g.payoutOffsetDays,
-        orderMethod: g.orderMethod,
-        maxSharesPerMember: g.maxSharesPerMember,
-        organizerParticipates: g.organizerParticipates,
-        organizerShares: g.organizerParticipates ? g.myShareCount : 0,
-        rulesText: g.rulesText ?? '',
-      });
-      this.sync();
-      this.form.updateValueAndValidity();
-      if (g.status === 'Recruiting') {
-        this.api.members(id).subscribe({
-          next: (members) => {
-            this.otherMembers = members.filter((m) => !m.isOrganizer).length;
-            this.loading.set(false);
-          },
-          error: () => {
-            this.otherMembers = null;
-            this.loading.set(false);
-          },
-        });
-      } else {
-        this.loading.set(false);
-      }
+        this.loadFailed.set(true);
+      },
     });
+  }
+
+  private loaded(id: string, g: Gameya): void {
+    this.original = g;
+    if (g.status !== 'Draft' && g.status !== 'Recruiting') {
+      this.notEditable.set(true);
+      this.loading.set(false);
+      return;
+    }
+    this.form.reset({
+      name: g.name,
+      description: g.description ?? '',
+      contributionAmount: g.contributionAmount,
+      shareCount: g.shareCount,
+      frequency: g.frequency,
+      startDate: g.startDate,
+      graceDays: g.graceDays,
+      payoutTiming: g.payoutTiming,
+      payoutOffsetDays: g.payoutOffsetDays,
+      orderMethod: g.orderMethod,
+      maxSharesPerMember: g.maxSharesPerMember,
+      organizerParticipates: g.organizerParticipates,
+      organizerShares: g.organizerParticipates ? g.myShareCount : 0,
+      rulesText: g.rulesText ?? '',
+    });
+    this.sync();
+    this.form.updateValueAndValidity();
+    if (g.status === 'Recruiting') {
+      this.api.members(id).subscribe({
+        next: (members) => {
+          this.otherMembers = members.filter((m) => !m.isOrganizer).length;
+          this.loading.set(false);
+        },
+        error: () => {
+          this.otherMembers = null;
+          this.loading.set(false);
+        },
+      });
+    } else {
+      this.loading.set(false);
+    }
   }
 }

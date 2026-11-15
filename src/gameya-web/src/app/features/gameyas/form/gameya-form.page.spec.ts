@@ -13,6 +13,7 @@ const texts = {
     form: {
       errors: { required: 'REQUIRED', server: 'SERVER-INVALID', general: 'GENERAL' },
       notEditable: 'NOT-EDITABLE',
+      loadFailed: 'LOAD-FAILED',
       reacceptMessageUnknown: 'REACCEPT-UNKNOWN',
       reacceptTitle: 'REACCEPT-TITLE',
       reacceptMessage: 'REACCEPT {{count}}',
@@ -271,6 +272,21 @@ describe('GameyaFormPage', () => {
     f.detectChanges();
     const err = f.nativeElement.querySelector('mat-error') as HTMLElement | null;
     expect(err?.textContent).toContain('SERVER-INVALID');
+  });
+
+  it('a failed load shows a retry instead of loading forever, and retry fetches again', () => {
+    const f = setup('g1');
+    ctrl.expectOne('/api/gameyas/g1').flush(null, { status: 500, statusText: 'Server Error' });
+    f.detectChanges();
+    expect(q(f, 'load-failed')?.textContent).toContain('LOAD-FAILED');
+    expect(f.nativeElement.querySelector('form')).toBeNull();
+
+    (q(f, 'retry') as HTMLButtonElement).click();
+    ctrl.expectOne('/api/gameyas/g1').flush(existing({ status: 'Draft' }));
+    f.detectChanges();
+    expect(q(f, 'load-failed')).toBeNull();
+    expect(f.nativeElement.querySelector('form')).not.toBeNull();
+    expect((q(f, 'f-name') as HTMLInputElement).value).toBe('Family');
   });
 
   it.each(['Active', 'Cancelled'] as const)(
