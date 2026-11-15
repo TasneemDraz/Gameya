@@ -22,7 +22,7 @@ import { problemOf } from '../../../core/auth/error.interceptor';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog';
 import { PhoneInput } from '../../../shared/phone-input';
 import { ReasonDialog, ReasonDialogData } from '../../../shared/reason-dialog';
-import { GameyaApi } from '../gameya.api';
+import { GameyaApi, INVITE_CODES_FOR_ORGANIZER } from '../gameya.api';
 import { Gameya, JoinRequest, PendingInvite } from '../gameya.models';
 import { releaseKey } from './busy';
 
@@ -176,9 +176,6 @@ import { releaseKey } from './busy';
           @for (i of invites(); track i.id) {
             <li class="row" data-testid="invite-row">
               <div class="who">
-                @if (i.registeredName) {
-                  <span class="name">{{ i.registeredName }}</span>
-                }
                 <span class="phone" dir="ltr">{{ i.phone }}</span>
                 <span class="meta">{{
                   'gameyas.page.shares' | transloco: { count: i.shareCount }
@@ -188,9 +185,7 @@ import { releaseKey } from './busy';
                 mat-stroked-button
                 type="button"
                 data-testid="revoke"
-                [attr.aria-label]="
-                  'gameyas.manage.revokeNamed' | transloco: { name: i.registeredName ?? i.phone }
-                "
+                [attr.aria-label]="'gameyas.manage.revokeNamed' | transloco: { name: i.phone }"
                 [disabled]="busy().has(i.id)"
                 (click)="revoke(i)"
               >
@@ -391,10 +386,16 @@ export class ManageTab {
 
   /**
    * INVALID_PHONE and VALIDATION_FAILED are not toasted by the error interceptor, so they are shown
-   * here once; every other error goes to the page (which reloads on a 409).
+   * here once. Nor are the conflicts in INVITE_CODES_FOR_ORGANIZER, whose shared text speaks as the
+   * joiner ("You already…"): they get the organizer's wording here. Every other error goes to the
+   * page (which reloads on a 409).
    */
   private inviteFailed(err: unknown): boolean {
     const problem = problemOf(err);
+    if (problem?.code && INVITE_CODES_FOR_ORGANIZER.has(problem.code)) {
+      this.inviteError.set(`gameyas.manage.inviteErrors.${problem.code}`);
+      return true;
+    }
     if (problem?.code === 'INVALID_PHONE' || problem?.errors?.['phone']) {
       this.inviteError.set('errors.INVALID_PHONE');
       return true;

@@ -10,7 +10,16 @@ import { GameyaApi } from '../gameyas/gameya.api';
 import { InvitePreview } from '../gameyas/gameya.models';
 import { JoinForm, JoinSubmission } from '../gameyas/join/join-form';
 
-type View = 'loading' | 'failed' | 'invalid' | 'cancelled' | 'member' | 'pending' | 'full' | 'open';
+type View =
+  | 'loading'
+  | 'failed'
+  | 'invalid'
+  | 'cancelled'
+  | 'member'
+  | 'invited'
+  | 'pending'
+  | 'full'
+  | 'open';
 
 function isInvalidCode(err: unknown): boolean {
   return (
@@ -47,6 +56,8 @@ export class InvitePreviewPage {
     if (!p) return 'loading';
     if (p.state === 'Cancelled') return 'cancelled';
     if (p.relationship === 'Member' || p.relationship === 'Organizer') return 'member';
+    // A direct invite already holds the visitor's shares, so it wins over the join form and a full gam'eya.
+    if (p.relationship === 'Invited' && p.inviteId) return 'invited';
     if (p.relationship === 'RequestPending') return 'pending';
     if (p.state === 'Full') return 'full';
     return 'open';

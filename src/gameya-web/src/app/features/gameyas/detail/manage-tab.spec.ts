@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { TranslocoTestingModule } from '@jsverse/transloco';
 import { of } from 'rxjs';
+import { HANDLED_CODES } from '../../../core/auth/error.interceptor';
 import { Gameya, GameyaMember, JoinRequest, PendingInvite } from '../gameya.models';
 import { ManageTab } from './manage-tab';
 import { MembersTab } from './members-tab';
@@ -21,6 +22,11 @@ const texts = {
       revokeNamed: 'REVOKE {{name}}',
       removeNamed: 'REMOVE {{name}}',
       removeTitle: 'REMOVE-TITLE',
+      inviteErrors: {
+        REQUEST_ALREADY_PENDING: 'ORG-ALREADY-INVITED',
+        ALREADY_MEMBER: 'ORG-ALREADY-MEMBER',
+        INVITEE_REQUEST_PENDING: 'ORG-ASKED-ALREADY',
+      },
     },
   },
 };
@@ -73,7 +79,6 @@ const invite = (over: Partial<PendingInvite>): PendingInvite => ({
   id: 'i1',
   phone: '01112345678',
   shareCount: 1,
-  registeredName: null,
   ...over,
 });
 
@@ -201,7 +206,7 @@ describe('ManageTab', () => {
   });
 
   it('invite by phone posts the phone and share count; revoke removes the row', () => {
-    const f = setup(gameya(), [], [invite({ id: 'i1', registeredName: 'Hany' })]);
+    const f = setup(gameya(), [], [invite({ id: 'i1' })]);
     const phone = q(f, 'phone-input') as HTMLInputElement;
     phone.value = '01098765432';
     phone.dispatchEvent(new Event('input'));
@@ -218,15 +223,14 @@ describe('ManageTab', () => {
     post.flush({ id: 'i2' }, { status: 201, statusText: 'Created' });
     ctrl
       .expectOne((r) => r.method === 'GET' && r.url === '/api/gameyas/g1/invites')
-      .flush([
-        invite({ id: 'i1', registeredName: 'Hany' }),
-        invite({ id: 'i2', phone: '01098765432', shareCount: 2 }),
-      ]);
+      .flush([invite({ id: 'i1' }), invite({ id: 'i2', phone: '01098765432', shareCount: 2 })]);
     f.detectChanges();
     expect(all(f, 'invite-row')).toHaveLength(2);
 
     const revokes = all(f, 'revoke');
-    expect(revokes[0].getAttribute('aria-label')).toBe('REVOKE Hany');
+    // Only the typed phone: an invitee's name is not shown before they accept.
+    expect(all(f, 'invite-row')[0].querySelector('.name')).toBeNull();
+    expect(revokes[0].getAttribute('aria-label')).toBe('REVOKE 01112345678');
     expect(revokes[1].getAttribute('aria-label')).toBe('REVOKE 01098765432');
     revokes[0].click();
     f.detectChanges();
@@ -236,6 +240,31 @@ describe('ManageTab', () => {
     del.flush(null);
     f.detectChanges();
     expect(all(f, 'invite-row')).toHaveLength(1);
+  });
+
+  it.each([
+    ['REQUEST_ALREADY_PENDING', 'ORG-ALREADY-INVITED'],
+    ['ALREADY_MEMBER', 'ORG-ALREADY-MEMBER'],
+    ['INVITEE_REQUEST_PENDING', 'ORG-ASKED-ALREADY'],
+  ])('a %s conflict on invite is explained in the organizer’s words', (code, text) => {
+    const f = setup(gameya());
+    const failed = vi.fn();
+    f.componentInstance.failed.subscribe(failed);
+    const phone = q(f, 'phone-input') as HTMLInputElement;
+    phone.value = '01098765432';
+    phone.dispatchEvent(new Event('input'));
+    f.detectChanges();
+
+    q(f, 'invite-submit')!.click();
+    const post = ctrl.expectOne((r) => r.method === 'POST' && r.url === '/api/gameyas/g1/invites');
+    // The global snackbar leaves these codes to this tab.
+    expect(post.request.context.get(HANDLED_CODES).has(code)).toBe(true);
+    post.flush({ code }, { status: 409, statusText: 'Conflict' });
+    f.detectChanges();
+
+    expect(q(f, 'invite-error')!.textContent).toContain(text);
+    expect(failed).not.toHaveBeenCalled();
+    expect(q(f, 'invite-submit')!.hasAttribute('disabled')).toBe(false);
   });
 
   it('Open for recruiting shown only in Draft; Cancel in Draft and Recruiting', () => {

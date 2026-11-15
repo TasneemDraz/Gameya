@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslocoTestingModule } from '@jsverse/transloco';
-import { MyGameya, MyInvite } from '../gameya.models';
+import { MyGameya, MyInvite, MyJoinRequest } from '../gameya.models';
 import { GameyasHomePage } from './gameyas-home.page';
 
 const card = (over: Partial<MyGameya>): MyGameya => ({
@@ -30,8 +30,26 @@ const invite: MyInvite = {
   organizerName: 'Sara',
 };
 
+const request = (over: Partial<MyJoinRequest> = {}): MyJoinRequest => ({
+  gameyaId: 'g5',
+  name: 'Neighbours',
+  status: 'Pending',
+  contributionAmount: 750,
+  gameyaShareCount: 8,
+  shareCount: 2,
+  needsReaccept: false,
+  ...over,
+});
+
 const texts = {
   gameyas: {
+    requests: {
+      title: 'REQUESTS',
+      withdraw: 'WITHDRAW',
+      withdrawNamed: 'WITHDRAW {{name}}',
+      reaccept: 'REACCEPT-TERMS',
+      reacceptNamed: 'REACCEPT {{name}}',
+    },
     organizer: 'ORGANIZER',
     needsReaccept: 'REACCEPT',
     groups: { Active: 'GROUP-ACTIVE', Recruiting: 'GROUP-RECRUITING' },
@@ -42,7 +60,7 @@ const texts = {
 describe('GameyasHomePage', () => {
   let ctrl: HttpTestingController;
 
-  function setup(mine: MyGameya[], invites: MyInvite[]) {
+  function setup(mine: MyGameya[], invites: MyInvite[], requests: MyJoinRequest[] = []) {
     TestBed.configureTestingModule({
       imports: [
         TranslocoTestingModule.forRoot({
@@ -57,6 +75,7 @@ describe('GameyasHomePage', () => {
     f.detectChanges();
     ctrl.expectOne('/api/gameyas').flush(mine);
     ctrl.expectOne('/api/me/invites').flush(invites);
+    ctrl.expectOne('/api/me/join-requests').flush(requests);
     f.detectChanges();
     return f;
   }
@@ -109,6 +128,66 @@ describe('GameyasHomePage', () => {
       .flush(null, { status: 204, statusText: 'No Content' });
     f.detectChanges();
     expect(all(f, 'invite-card')).toHaveLength(0);
+  });
+
+  it('lists my pending requests with named withdraw and re-accept buttons', () => {
+    const f = setup(
+      [],
+      [],
+      [request(), request({ gameyaId: 'g6', name: 'Office', needsReaccept: true })],
+    );
+    const cards = all(f, 'request-card');
+    expect(cards).toHaveLength(2);
+    expect(cards[0].textContent).toContain('Neighbours');
+    expect(cards[0].querySelector('[data-testid="request-reaccept"]')).toBeNull();
+    expect(
+      cards[0].querySelector('[data-testid="request-withdraw"]')!.getAttribute('aria-label'),
+    ).toBe('WITHDRAW Neighbours');
+    expect(
+      cards[1].querySelector('[data-testid="request-reaccept"]')!.getAttribute('aria-label'),
+    ).toBe('REACCEPT Office');
+    // Requests alone are not "no gam'eyas": the empty state is hidden.
+    expect(all(f, 'empty-state')).toHaveLength(0);
+  });
+
+  it('withdraw is disabled while in flight and removes the request after the 204', () => {
+    const f = setup([], [], [request()]);
+    const button = all(f, 'request-withdraw')[0] as HTMLButtonElement;
+    button.click();
+    f.detectChanges();
+    expect(button.disabled).toBe(true);
+    const req = ctrl.expectOne('/api/gameyas/g5/join-requests/mine');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    f.detectChanges();
+    expect(all(f, 'request-card')).toHaveLength(0);
+  });
+
+  it('re-accept is disabled while in flight and clears the warning after the 204', () => {
+    const f = setup([], [], [request({ needsReaccept: true })]);
+    const reaccept = all(f, 'request-reaccept')[0] as HTMLButtonElement;
+    reaccept.click();
+    f.detectChanges();
+    expect(reaccept.disabled).toBe(true);
+    expect((all(f, 'request-withdraw')[0] as HTMLButtonElement).disabled).toBe(true);
+    ctrl
+      .expectOne((r) => r.method === 'POST' && r.url === '/api/gameyas/g5/reaccept')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    f.detectChanges();
+    expect(all(f, 'request-card')).toHaveLength(1);
+    expect(all(f, 'request-reaccept')).toHaveLength(0);
+    expect((all(f, 'request-withdraw')[0] as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('a failed withdraw re-enables the button and keeps the request', () => {
+    const f = setup([], [], [request()]);
+    all(f, 'request-withdraw')[0].click();
+    ctrl
+      .expectOne('/api/gameyas/g5/join-requests/mine')
+      .flush({ code: 'INVALID_STATUS_TRANSITION' }, { status: 409, statusText: 'Conflict' });
+    f.detectChanges();
+    expect(all(f, 'request-card')).toHaveLength(1);
+    expect((all(f, 'request-withdraw')[0] as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('empty state explains a gameya and that the app never holds money', () => {

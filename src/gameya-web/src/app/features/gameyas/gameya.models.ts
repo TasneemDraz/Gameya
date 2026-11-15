@@ -5,7 +5,8 @@ export type PayoutTiming = 'AfterFullCollection' | 'FixedDate';
 export type OrderMethod = 'Manual' | 'RandomDraw' | 'ByRequest';
 export type GameyaRole = 'None' | 'Member' | 'Organizer';
 export type InvitePreviewState = 'Open' | 'Cancelled' | 'Full';
-export type InviteRelationship = 'None' | 'Member' | 'RequestPending' | 'Organizer';
+export type InviteRelationship = 'None' | 'Member' | 'Invited' | 'RequestPending' | 'Organizer';
+export type JoinRequestStatus = 'Pending' | 'Approved' | 'Rejected' | 'Withdrawn';
 
 /** Dates are `yyyy-MM-dd`; timestamps are ISO 8601. */
 export interface InvitePreview {
@@ -30,6 +31,8 @@ export interface InvitePreview {
   organizerName: string | null;
   relationship: InviteRelationship | null;
   requestNeedsReaccept: boolean;
+  /** The viewer's own pending direct invite; set only when `relationship` is `Invited`. */
+  inviteId: string | null;
 }
 
 export interface MyGameya {
@@ -53,6 +56,17 @@ export interface MyInvite {
   invitedShares: number;
   orderMethod: OrderMethod;
   organizerName: string | null;
+}
+
+/** The caller's own pending request to join (`MyJoinRequestDto`). */
+export interface MyJoinRequest {
+  gameyaId: string;
+  name: string;
+  status: JoinRequestStatus;
+  contributionAmount: number;
+  gameyaShareCount: number;
+  shareCount: number;
+  needsReaccept: boolean;
 }
 
 export interface TermsDiff {
@@ -127,11 +141,11 @@ export interface JoinRequest {
   termsCurrent: boolean;
 }
 
+/** Only the phone the organizer typed: who it belongs to stays private until the invite is accepted. */
 export interface PendingInvite {
   id: string;
   phone: string;
   shareCount: number;
-  registeredName: string | null;
 }
 
 /** The create and edit form body (`GameyaSettingsBody`). */

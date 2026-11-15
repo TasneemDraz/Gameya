@@ -1,7 +1,7 @@
 import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { SILENT_ERRORS } from '../../core/auth/error.interceptor';
+import { HANDLED_CODES, SILENT_ERRORS } from '../../core/auth/error.interceptor';
 import {
   ActivityPage,
   Gameya,
@@ -12,6 +12,7 @@ import {
   JoinRequest,
   MyGameya,
   MyInvite,
+  MyJoinRequest,
   PendingInvite,
 } from './gameya.models';
 
@@ -20,6 +21,13 @@ const silent = {
   withCredentials: true,
   context: new HttpContext().set(SILENT_ERRORS, true),
 } as const;
+
+/** Conflicts an invite can hit that the manage tab explains in the organizer's words. */
+export const INVITE_CODES_FOR_ORGANIZER: ReadonlySet<string> = new Set([
+  'REQUEST_ALREADY_PENDING',
+  'ALREADY_MEMBER',
+  'INVITEE_REQUEST_PENDING',
+]);
 
 @Injectable({ providedIn: 'root' })
 export class GameyaApi {
@@ -88,16 +96,20 @@ export class GameyaApi {
   withdrawMyRequest(id: string): Observable<void> {
     return this.http.delete<void>(`/api/gameyas/${id}/join-requests/mine`, opts);
   }
+  listMyJoinRequests(): Observable<MyJoinRequest[]> {
+    return this.http.get<MyJoinRequest[]>('/api/me/join-requests', opts);
+  }
 
   // Direct invites (organizer side)
   invites(id: string): Observable<PendingInvite[]> {
     return this.http.get<PendingInvite[]>(`/api/gameyas/${id}/invites`, opts);
   }
+  /** The manage tab words these conflicts for the organizer, so they are not toasted in the joiner's words. */
   inviteByPhone(id: string, phone: string, shareCount: number): Observable<{ id: string }> {
     return this.http.post<{ id: string }>(
       `/api/gameyas/${id}/invites`,
       { phone, shareCount },
-      opts,
+      { ...opts, context: new HttpContext().set(HANDLED_CODES, INVITE_CODES_FOR_ORGANIZER) },
     );
   }
   revokeInvite(id: string, inviteId: string): Observable<void> {

@@ -3,10 +3,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { Observable } from 'rxjs';
 import { MoneyPipe } from '../../../core/format/money.pipe';
 import { StatusChip } from '../../../shared/status-chip';
 import { GameyaApi } from '../gameya.api';
-import { GameyaStatus, MyGameya, MyInvite } from '../gameya.models';
+import { GameyaStatus, MyGameya, MyInvite, MyJoinRequest } from '../gameya.models';
 import { gameyaStatusChip } from '../gameya-status';
 
 const GROUP_ORDER: GameyaStatus[] = ['Draft', 'Recruiting', 'Active', 'Completed', 'Cancelled'];
@@ -67,6 +68,56 @@ const GROUP_ORDER: GameyaStatus[] = ['Draft', 'Recruiting', 'Active', 'Completed
       </section>
     }
 
+    @if (requests().length > 0) {
+      <section class="section" aria-labelledby="requests-title">
+        <h2 id="requests-title">{{ 'gameyas.requests.title' | transloco }}</h2>
+        @for (r of requests(); track r.gameyaId) {
+          <article class="card" data-testid="request-card">
+            <h3 class="name">{{ r.name }}</h3>
+            <p class="meta">{{ 'gameyas.requests.pending' | transloco }}</p>
+            <p class="meta">
+              {{
+                'gameyas.amountTimesShares'
+                  | transloco
+                    : { amount: (r.contributionAmount | money), shares: r.gameyaShareCount }
+              }}
+            </p>
+            <p class="meta">{{ 'gameyas.requests.shares' | transloco: { count: r.shareCount } }}</p>
+            @if (r.needsReaccept) {
+              <p class="badge" data-testid="request-needs-reaccept">
+                <mat-icon aria-hidden="true">warning</mat-icon>
+                {{ 'gameyas.requests.needsReaccept' | transloco }}
+              </p>
+            }
+            <div class="actions">
+              @if (r.needsReaccept) {
+                <button
+                  mat-flat-button
+                  type="button"
+                  data-testid="request-reaccept"
+                  [attr.aria-label]="'gameyas.requests.reacceptNamed' | transloco: { name: r.name }"
+                  [disabled]="busy().has(requestKey(r))"
+                  (click)="reaccept(r)"
+                >
+                  {{ 'gameyas.requests.reaccept' | transloco }}
+                </button>
+              }
+              <button
+                mat-stroked-button
+                type="button"
+                data-testid="request-withdraw"
+                [attr.aria-label]="'gameyas.requests.withdrawNamed' | transloco: { name: r.name }"
+                [disabled]="busy().has(requestKey(r))"
+                (click)="withdraw(r)"
+              >
+                {{ 'gameyas.requests.withdraw' | transloco }}
+              </button>
+            </div>
+          </article>
+        }
+      </section>
+    }
+
     @for (group of groups(); track group.status) {
       <section class="section">
         <h2 data-testid="group-header">{{ 'gameyas.groups.' + group.status | transloco }}</h2>
@@ -106,7 +157,7 @@ const GROUP_ORDER: GameyaStatus[] = ['Draft', 'Recruiting', 'Active', 'Completed
       </section>
     }
 
-    @if (loaded() && mine().length === 0) {
+    @if (loaded() && mine().length === 0 && requests().length === 0) {
       <section class="empty" data-testid="empty-state">
         <h2>{{ 'gameyas.empty.title' | transloco }}</h2>
         <p>{{ 'gameyas.empty.body' | transloco }}</p>
@@ -123,6 +174,7 @@ export class GameyasHomePage {
 
   protected readonly mine = signal<MyGameya[]>([]);
   protected readonly invites = signal<MyInvite[]>([]);
+  protected readonly requests = signal<MyJoinRequest[]>([]);
   protected readonly loaded = signal(false);
   protected readonly busy = signal<ReadonlySet<string>>(new Set());
 
@@ -141,6 +193,40 @@ export class GameyasHomePage {
       this.loaded.set(true);
     });
     this.api.listMyInvites().subscribe((rows) => this.invites.set(rows));
+    this.api.listMyJoinRequests().subscribe((rows) => this.requests.set(rows));
+  }
+
+  /** One key per request, so withdraw and re-accept of the same request never run together. */
+  protected requestKey(r: MyJoinRequest): string {
+    return `request:${r.gameyaId}`;
+  }
+
+  protected withdraw(r: MyJoinRequest): void {
+    this.runForRequest(r, this.api.withdrawMyRequest(r.gameyaId), () =>
+      this.requests.update((list) => list.filter((x) => x.gameyaId !== r.gameyaId)),
+    );
+  }
+
+  protected reaccept(r: MyJoinRequest): void {
+    this.runForRequest(r, this.api.reaccept(r.gameyaId), () =>
+      this.requests.update((list) =>
+        list.map((x) => (x.gameyaId === r.gameyaId ? { ...x, needsReaccept: false } : x)),
+      ),
+    );
+  }
+
+  /** Errors are toasted by the global interceptor; the button is released either way. */
+  private runForRequest(r: MyJoinRequest, request: Observable<void>, done: () => void): void {
+    const key = this.requestKey(r);
+    if (this.busy().has(key)) return;
+    this.busy.update((s) => new Set(s).add(key));
+    request.subscribe({
+      next: () => {
+        done();
+        this.release(key);
+      },
+      error: () => this.release(key),
+    });
   }
 
   protected decline(inv: MyInvite): void {

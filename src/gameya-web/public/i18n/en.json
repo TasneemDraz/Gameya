@@ -72,7 +72,9 @@
     "INVITE_NOT_FOUND": "This invite is no longer available.",
     "ORGANIZER_CANNOT_LEAVE": "The organizer cannot leave. Cancel the Gam'eya instead.",
     "START_DATE_IN_PAST": "The start date cannot be in the past.",
-    "INVALID_PREFERENCES": "The preferred turns are not valid."
+    "INVALID_PREFERENCES": "The preferred turns are not valid.",
+    "INVITEE_REQUEST_PENDING": "This person has already asked to join. Answer their request under Join requests instead.",
+    "REQUESTER_ACCOUNT_DELETED": "This person has deleted their account, so the request cannot be approved. Decline it instead."
   },
   "landing": {
     "title": "Your savings circle with family and friends, no mix-ups",
@@ -168,7 +170,8 @@
       "TERMS_REACCEPTED": "Accepted the updated terms",
       "MEMBER_LEFT": "Left the Gam'eya",
       "MEMBER_REMOVED": "Removed a member"
-    }
+    },
+    "invitee": "The invitee"
   },
   "gameyas": {
     "title": "My Gam'eyas",
@@ -267,7 +270,8 @@
         "pastDate": "The date cannot be in the past.",
         "server": "This value is not accepted.",
         "general": "Something went wrong. Please try again."
-      }
+      },
+      "loadFailed": "This gam'eya could not be loaded. Check your connection and try again."
     },
     "page": {
       "overview": "Overview",
@@ -333,7 +337,22 @@
       "revokeNamed": "Cancel the invite for {{name}}",
       "removeNamed": "Remove {{name}}",
       "editSettings": "Edit settings",
-      "preferences": "Preferred turns: {{rounds}}"
+      "preferences": "Preferred turns: {{rounds}}",
+      "inviteErrors": {
+        "REQUEST_ALREADY_PENDING": "This number already has a pending invite.",
+        "ALREADY_MEMBER": "This number belongs to a member of this Gam'eya already.",
+        "INVITEE_REQUEST_PENDING": "This person has already asked to join. Answer their request under Join requests instead."
+      }
+    },
+    "requests": {
+      "title": "Your requests to join",
+      "pending": "Waiting for the organizer",
+      "shares": "Shares requested: {{count}}",
+      "needsReaccept": "The terms changed. Accept them so the organizer can approve you.",
+      "withdraw": "Withdraw",
+      "withdrawNamed": "Withdraw your request to join {{name}}",
+      "reaccept": "Accept the new terms",
+      "reacceptNamed": "Accept the new terms of {{name}}"
     }
   },
   "invite": {
@@ -367,6 +386,8 @@
       "submit": "Send request",
       "submitted": "Your request was sent",
       "accept": "Accept the invite"
-    }
+    },
+    "invited": "You have been invited to this Gam'eya directly. Your shares are already held for you.",
+    "openInvite": "Answer the invitation"
   }
 }

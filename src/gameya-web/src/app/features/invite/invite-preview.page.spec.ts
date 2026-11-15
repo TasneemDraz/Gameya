@@ -24,6 +24,8 @@ const texts = {
     organizerOwn: 'OWN',
     open: 'OPEN',
     pending: 'PENDING',
+    invited: 'INVITED-DIRECTLY',
+    openInvite: 'OPEN-INVITE',
     withdraw: 'WITHDRAW',
     reaccept: 'REACCEPT',
     rulesTitle: 'RULES',
@@ -64,6 +66,7 @@ const preview = (over: Partial<InvitePreview> = {}): InvitePreview => ({
   organizerName: 'Sara',
   relationship: null,
   requestNeedsReaccept: false,
+  inviteId: null,
   ...over,
 });
 
@@ -145,6 +148,18 @@ describe('InvitePreviewPage', () => {
     const f = setup(preview({ relationship: 'Member' }));
     const link = q(f, 'open-gameya') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('/gameyas/g1');
+  });
+
+  it('a directly invited visitor is sent to their invite instead of the join form, even when full', () => {
+    for (const state of ['Open', 'Full'] as const) {
+      const f = setup(preview({ state, relationship: 'Invited', inviteId: 'i7' }));
+      expect(q(f, 'state-invited')!.textContent).toContain('INVITED-DIRECTLY');
+      const link = q(f, 'open-invite') as HTMLAnchorElement;
+      expect(link.getAttribute('href')).toBe('/gameyas/invites/i7/accept');
+      expect(link.textContent).toContain('OPEN-INVITE');
+      expect((f.nativeElement as HTMLElement).querySelector('gy-join-form')).toBeNull();
+      expect(q(f, 'state-full')).toBeNull();
+    }
   });
 
   it('a 429 shows the retry state, not the invalid state, and retry fetches again', () => {

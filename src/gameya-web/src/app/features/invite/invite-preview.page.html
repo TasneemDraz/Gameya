@@ -130,6 +130,18 @@
             </div>
           </section>
         }
+        @case ('invited') {
+          <section class="state" data-testid="state-invited">
+            <p>{{ 'invite.invited' | transloco }}</p>
+            <a
+              mat-flat-button
+              [routerLink]="['/gameyas/invites', p.inviteId, 'accept']"
+              data-testid="open-invite"
+            >
+              {{ 'invite.openInvite' | transloco }}
+            </a>
+          </section>
+        }
         @case ('full') {
           <section class="state" data-testid="state-full">
             <h2>{{ 'invite.full' | transloco }}</h2>

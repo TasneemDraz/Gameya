@@ -14,7 +14,11 @@ import { CairoDatePipe } from '../../../core/format/cairo-date.pipe';
 import { GameyaApi } from '../gameya.api';
 import { ActivityEntry } from '../gameya.models';
 
-/** Paged activity log; action codes are rendered through `activity.actions.*`. */
+/**
+ * Paged activity log; action codes are rendered through `activity.actions.*`. The server leaves out
+ * entries and notes a viewer may not see, and never names who declined an invite, so a missing
+ * actor is either that invitee or a deleted user.
+ */
 @Component({
   selector: 'gy-activity-tab',
   imports: [MatButtonModule, TranslocoPipe, CairoDatePipe],
@@ -27,7 +31,7 @@ import { ActivityEntry } from '../gameya.models';
       @for (e of items(); track $index) {
         <li class="row activity" data-testid="activity-row">
           <div class="who">
-            <span class="name">{{ e.actorName ?? ('common.deletedUser' | transloco) }}</span>
+            <span class="name">{{ e.actorName ?? (fallbackActorKey(e) | transloco) }}</span>
             <span>{{ 'activity.actions.' + e.action | transloco }}</span>
             @if (e.note) {
               <span class="note">{{ e.note }}</span>
@@ -73,6 +77,10 @@ export class ActivityTab {
       this.refresh();
       untracked(() => this.fetch(id, 1));
     });
+  }
+
+  protected fallbackActorKey(e: ActivityEntry): string {
+    return e.action === 'INVITE_DECLINED' ? 'activity.invitee' : 'common.deletedUser';
   }
 
   protected more(): void {
