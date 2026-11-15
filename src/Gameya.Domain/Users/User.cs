@@ -4,7 +4,7 @@ using Gameya.Domain.Common;
 
 namespace Gameya.Domain.Users;
 
-public class User : Entity
+public class User : AuditableEntity
 {
     public static readonly TimeSpan EmailTokenLifetime = TimeSpan.FromHours(24);
     public static readonly TimeSpan EmailSendWindow = TimeSpan.FromHours(1);
@@ -28,7 +28,6 @@ public class User : Entity
     public DateTimeOffset? PendingEmailExpiresAt { get; private set; }
     public string? PhotoKey { get; private set; }
     public bool IsBlocked { get; private set; }
-    public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? DeletedAt { get; private set; }
     public bool IsDeleted => DeletedAt is not null;
     public IReadOnlyCollection<string> Roles => _roles;
@@ -36,7 +35,7 @@ public class User : Entity
 
     public static User Register(Guid id, PhoneNumber phone, Language language, DateTimeOffset now)
     {
-        var user = new User { Id = id, Phone = phone, Language = language, CreatedAt = now };
+        var user = new User { Id = id, Phone = phone, Language = language };
         user.Raise(new UserRegistered(id, language));
         return user;
     }

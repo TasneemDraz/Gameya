@@ -1,7 +1,6 @@
 using Gameya.Application.Abstractions;
 using Gameya.Infrastructure.Email;
 using Gameya.Infrastructure.Files;
-using Gameya.Infrastructure.Participation;
 using Gameya.Infrastructure.Persistence;
 using Gameya.Infrastructure.Security;
 using Gameya.Infrastructure.Sms;
@@ -29,14 +28,14 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("App")
             ?? throw new InvalidOperationException("ConnectionStrings:App is not configured.");
 
-        services.AddDbContext<AppDbContext>(options =>
+        services.AddScoped<AuditingInterceptor>();
+        services.AddDbContext<AppDbContext>((sp, options) =>
         {
-            AppDbContext.Configure(options, connectionString);
+            AppDbContext.Configure(options, connectionString, sp.GetRequiredService<AuditingInterceptor>());
             if (environment.IsDevelopment()) options.EnableDetailedErrors();
         });
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddSingleton<IClock, SystemClock>();
-        services.AddSingleton<IActiveParticipationChecker, NoParticipationChecker>();
 
         var hashKey = configuration["Security:HashKey"];
         if (string.IsNullOrWhiteSpace(hashKey))

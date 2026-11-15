@@ -1,0 +1,61 @@
+:host {
+  display: block;
+}
+
+.head {
+  margin-block-end: 16px;
+}
+
+.eyebrow,
+.meta {
+  margin: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+
+  div {
+    padding: 8px;
+    border: 1px solid var(--gy-outline, #c4c7c5);
+    border-radius: 12px;
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+  }
+}
+
+.section-title {
+  font-size: 1.125rem;
+}
+
+.rules {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--gy-outline, #c4c7c5);
+}
+
+.state {
+  margin-block: 16px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

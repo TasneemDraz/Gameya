@@ -10,6 +10,9 @@ const INLINE = /^(OTP_|NAME_INVALID$|VALIDATION_FAILED$|INVALID_PHONE$)/;
 /** Set on requests whose failures the caller handles itself (session refresh and startup probing). */
 export const SILENT_ERRORS = new HttpContextToken<boolean>(() => false);
 
+/** Codes this one request's caller shows in its own words; any other failure is still toasted. */
+export const HANDLED_CODES = new HttpContextToken<ReadonlySet<string>>(() => new Set());
+
 export interface ProblemBody {
   code?: string;
   params?: Record<string, unknown>;
@@ -32,7 +35,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const status = err instanceof HttpErrorResponse ? err.status : 0;
       // 401s are handled by the auth interceptor (refresh or redirect); a refresh/session failure is silent.
       if (req.context.get(SILENT_ERRORS)) return throwError(() => err);
-      if (status !== 401 && !(problem?.code && INLINE.test(problem.code))) {
+      const handled =
+        !!problem?.code &&
+        (INLINE.test(problem.code) || req.context.get(HANDLED_CODES).has(problem.code));
+      if (status !== 401 && !handled) {
         const code =
           problem?.code ??
           (status === 429 ? 'RATE_LIMITED' : status === 413 ? 'FILE_TOO_LARGE' : 'INTERNAL');

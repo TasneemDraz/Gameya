@@ -3,7 +3,6 @@ import { authGuard, profileCompleteGuard } from './core/auth/auth.guards';
 import { AppLayout } from './layout/app-layout';
 import { PublicLayout } from './layout/public-layout';
 
-// Home is /profile until sub-project 2 adds /gameyas.
 export const routes: Routes = [
   {
     path: '',
@@ -24,6 +23,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/auth/otp.page').then((m) => m.OtpPage),
       },
       {
+        path: 'j/:code',
+        loadComponent: () =>
+          import('./features/invite/invite-preview.page').then((m) => m.InvitePreviewPage),
+      },
+      {
         path: 'verify-email',
         loadComponent: () =>
           import('./features/verify-email/verify-email.page').then((m) => m.VerifyEmailPage),
@@ -38,6 +42,37 @@ export const routes: Routes = [
       {
         path: 'welcome/name',
         loadComponent: () => import('./features/auth/name-setup.page').then((m) => m.NameSetupPage),
+      },
+      {
+        path: 'gameyas',
+        pathMatch: 'full',
+        canActivate: [profileCompleteGuard],
+        loadComponent: () =>
+          import('./features/gameyas/home/gameyas-home.page').then((m) => m.GameyasHomePage),
+      },
+      {
+        path: 'gameyas/new',
+        canActivate: [profileCompleteGuard],
+        loadComponent: () =>
+          import('./features/gameyas/form/gameya-form.page').then((m) => m.GameyaFormPage),
+      },
+      {
+        path: 'gameyas/invites/:inviteId/accept',
+        canActivate: [profileCompleteGuard],
+        loadComponent: () =>
+          import('./features/gameyas/join/accept-invite.page').then((m) => m.AcceptInvitePage),
+      },
+      {
+        path: 'gameyas/:id',
+        canActivate: [profileCompleteGuard],
+        loadComponent: () =>
+          import('./features/gameyas/detail/gameya.page').then((m) => m.GameyaPage),
+      },
+      {
+        path: 'gameyas/:id/edit',
+        canActivate: [profileCompleteGuard],
+        loadComponent: () =>
+          import('./features/gameyas/form/gameya-form.page').then((m) => m.GameyaFormPage),
       },
       {
         path: 'profile',

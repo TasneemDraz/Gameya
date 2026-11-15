@@ -26,6 +26,9 @@ public static class DependencyInjection
         services.AddScoped<Auth.SessionIssuer>();
         services.AddScoped<Users.VerificationEmailSender>();
         services.AddScoped<Users.VerifiedEmailResolver>();
+        services.AddScoped<Gameyas.IGameyaAccess, Gameyas.GameyaAccess>();
+        services.AddSingleton<Gameyas.IInviteCodeGenerator, Gameyas.InviteCodeGenerator>();
+        services.AddScoped<IActiveParticipationChecker, Gameyas.GameyaParticipationChecker>();
         services.AddScoped<TransactionCallbacks>();
         services.AddScoped<ITransactionCallbacks>(sp => sp.GetRequiredService<TransactionCallbacks>());
 

@@ -1,6 +1,7 @@
 using Gameya.Application.Abstractions;
 using Gameya.Application.Auth.Specifications;
 using Gameya.Application.Common.Specifications;
+using Gameya.Application.Gameyas.Specifications;
 using Gameya.Application.Security;
 using Gameya.Application.Users.Specifications;
 using Gameya.Domain.Common;
@@ -23,6 +24,16 @@ public sealed class DeleteAccountHandler(IAppDbContext db, ICurrentUser currentU
 
         if (await participation.HasRecruitingOrActiveGameyasAsync(userId, cancellationToken))
             throw new DomainException(ErrorCodes.ACCOUNT_HAS_ACTIVE_GAMEYAS);
+
+        // A request or invite left behind would otherwise stay approvable (or keep its shares reserved) for an account
+        // that no longer exists. Each aggregate is tracked, so its row version guards the change and its activity
+        // entries are written.
+        var phone = user.Phone;
+        foreach (var gameya in await db.Gameyas.ListAsync(
+                     new GameyaAggregatesWaitingOnUserSpec(userId, phone), cancellationToken))
+        {
+            gameya.ReleaseDeletedAccount(userId, phone);
+        }
 
         var now = clock.UtcNow;
         foreach (var t in await db.RefreshTokens.ListAsync(new ActiveRefreshTokensByUserSpec(userId), cancellationToken))

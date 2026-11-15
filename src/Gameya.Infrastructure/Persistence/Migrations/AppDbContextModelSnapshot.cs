@@ -199,6 +199,417 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("Gameya.Domain.Gameyas.GameyaCircle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("cancel_reason");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<decimal>("ContributionAmount")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("contribution_amount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("frequency");
+
+                    b.Property<int>("GraceDays")
+                        .HasColumnType("int")
+                        .HasColumnName("grace_days");
+
+                    b.Property<string>("InviteCode")
+                        .HasMaxLength(6)
+                        .HasColumnType("nvarchar(6)")
+                        .HasColumnName("invite_code");
+
+                    b.Property<int>("MaxSharesPerMember")
+                        .HasColumnType("int")
+                        .HasColumnName("max_shares_per_member");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("OrderMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("order_method");
+
+                    b.Property<Guid>("OrganizerId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("organizer_id");
+
+                    b.Property<bool>("OrganizerParticipates")
+                        .HasColumnType("bit")
+                        .HasColumnName("organizer_participates");
+
+                    b.Property<int?>("PayoutOffsetDays")
+                        .HasColumnType("int")
+                        .HasColumnName("payout_offset_days");
+
+                    b.Property<string>("PayoutTiming")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("payout_timing");
+
+                    b.Property<string>("RulesText")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasColumnName("rules_text");
+
+                    b.Property<int>("ShareCount")
+                        .HasColumnType("int")
+                        .HasColumnName("share_count");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TermsVersion")
+                        .HasColumnType("int")
+                        .HasColumnName("terms_version");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<byte[]>("row_version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("row_version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_gameyas");
+
+                    b.HasIndex("InviteCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_gameyas_invite_code")
+                        .HasFilter("invite_code IS NOT NULL");
+
+                    b.HasIndex("OrganizerId", "Status")
+                        .HasDatabaseName("ix_gameyas_organizer_id_status");
+
+                    b.ToTable("gameyas", (string)null);
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.JoinRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AcceptedTermsVersion")
+                        .HasColumnType("int")
+                        .HasColumnName("accepted_terms_version");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid>("GameyaId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("gameya_id");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("reject_reason");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_join_requests");
+
+                    b.HasIndex("GameyaId")
+                        .HasDatabaseName("ix_join_requests_gameya_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_join_requests_user_id");
+
+                    b.HasIndex("GameyaId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_join_requests_gameya_id_user_id")
+                        .HasFilter("[status] = 'Pending'");
+
+                    b.ToTable("join_requests", (string)null);
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.JoinRequestShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid>("JoinRequestId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("join_request_id");
+
+                    b.Property<string>("Preferences")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(32)")
+                        .HasColumnName("preferences");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_join_request_shares");
+
+                    b.HasIndex("JoinRequestId")
+                        .HasDatabaseName("ix_join_request_shares_join_request_id");
+
+                    b.ToTable("join_request_shares", (string)null);
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.MemberShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("membership_id");
+
+                    b.Property<string>("Preferences")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(32)")
+                        .HasColumnName("preferences");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_member_shares");
+
+                    b.HasIndex("MembershipId")
+                        .HasDatabaseName("ix_member_shares_membership_id");
+
+                    b.ToTable("member_shares", (string)null);
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.Membership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AcceptedTermsVersion")
+                        .HasColumnType("int")
+                        .HasColumnName("accepted_terms_version");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid>("GameyaId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("gameya_id");
+
+                    b.Property<DateTimeOffset>("JoinedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("joined_at");
+
+                    b.Property<string>("RemovalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("removal_reason");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_memberships");
+
+                    b.HasIndex("GameyaId")
+                        .HasDatabaseName("ix_memberships_gameya_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_memberships_user_id");
+
+                    b.HasIndex("GameyaId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_memberships_gameya_id_user_id")
+                        .HasFilter("[status] = 'Active'");
+
+                    b.ToTable("memberships", (string)null);
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.PendingInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid>("GameyaId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("gameya_id");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("phone");
+
+                    b.Property<int>("ShareCount")
+                        .HasColumnType("int")
+                        .HasColumnName("share_count");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pending_invites");
+
+                    b.HasIndex("GameyaId")
+                        .HasDatabaseName("ix_pending_invites_gameya_id");
+
+                    b.HasIndex("Phone")
+                        .HasDatabaseName("ix_pending_invites_phone");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_pending_invites_user_id");
+
+                    b.HasIndex("GameyaId", "Phone")
+                        .IsUnique()
+                        .HasDatabaseName("ix_pending_invites_gameya_id_phone")
+                        .HasFilter("[status] = 'Pending'");
+
+                    b.ToTable("pending_invites", (string)null);
+                });
+
             modelBuilder.Entity("Gameya.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -208,6 +619,10 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset")
                         .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("created_by_user_id");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("datetimeoffset")
@@ -263,6 +678,14 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit")
                         .HasColumnName("profile_complete");
 
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("updated_by_user_id");
+
                     b.PrimitiveCollection<string>("_roles")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")
@@ -291,6 +714,105 @@ namespace Gameya.Infrastructure.Persistence.Migrations
                         .HasFilter("deleted_at IS NULL");
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.GameyaCircle", b =>
+                {
+                    b.HasOne("Gameya.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_gameyas_users_organizer_id");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.JoinRequest", b =>
+                {
+                    b.HasOne("Gameya.Domain.Gameyas.GameyaCircle", null)
+                        .WithMany("JoinRequests")
+                        .HasForeignKey("GameyaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_join_requests_gameyas_gameya_id");
+
+                    b.HasOne("Gameya.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_join_requests_users_user_id");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.JoinRequestShare", b =>
+                {
+                    b.HasOne("Gameya.Domain.Gameyas.JoinRequest", null)
+                        .WithMany("Shares")
+                        .HasForeignKey("JoinRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_join_request_shares_join_requests_join_request_id");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.MemberShare", b =>
+                {
+                    b.HasOne("Gameya.Domain.Gameyas.Membership", null)
+                        .WithMany("Shares")
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_member_shares_memberships_membership_id");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.Membership", b =>
+                {
+                    b.HasOne("Gameya.Domain.Gameyas.GameyaCircle", null)
+                        .WithMany("Memberships")
+                        .HasForeignKey("GameyaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_memberships_gameyas_gameya_id");
+
+                    b.HasOne("Gameya.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_memberships_users_user_id");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.PendingInvite", b =>
+                {
+                    b.HasOne("Gameya.Domain.Gameyas.GameyaCircle", null)
+                        .WithMany("PendingInvites")
+                        .HasForeignKey("GameyaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pending_invites_gameyas_gameya_id");
+
+                    b.HasOne("Gameya.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pending_invites_users_user_id");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.GameyaCircle", b =>
+                {
+                    b.Navigation("JoinRequests");
+
+                    b.Navigation("Memberships");
+
+                    b.Navigation("PendingInvites");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.JoinRequest", b =>
+                {
+                    b.Navigation("Shares");
+                });
+
+            modelBuilder.Entity("Gameya.Domain.Gameyas.Membership", b =>
+                {
+                    b.Navigation("Shares");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,0 +1,174 @@
+@switch (view()) {
+  @case ('invalid') {
+    <section class="state" data-testid="state-invalid">
+      <h1 class="title">{{ 'invite.invalid' | transloco }}</h1>
+      <p>{{ 'invite.invalidBody' | transloco }}</p>
+    </section>
+  }
+  @case ('failed') {
+    <section class="state" data-testid="state-failed" role="alert">
+      <p>{{ 'invite.loadFailed' | transloco }}</p>
+      <button mat-stroked-button type="button" data-testid="retry" (click)="retry()">
+        {{ 'common.retry' | transloco }}
+      </button>
+    </section>
+  }
+  @case ('cancelled') {
+    <section class="state" data-testid="state-cancelled">
+      <h1 class="title">{{ 'invite.cancelled' | transloco }}</h1>
+      <p>{{ 'invite.cancelledBody' | transloco }}</p>
+    </section>
+  }
+  @default {
+    @if (preview(); as p) {
+      <header class="head">
+        <p class="eyebrow">{{ 'invite.title' | transloco }}</p>
+        <h1 class="title" data-testid="gameya-name">{{ p.name }}</h1>
+        @if (p.organizerName) {
+          <p class="meta" data-testid="organizer-name">
+            {{ 'invite.organizer' | transloco: { name: p.organizerName } }}
+          </p>
+        }
+        @if (p.description) {
+          <p>{{ p.description }}</p>
+        }
+      </header>
+
+      <dl class="facts" data-testid="facts">
+        <div>
+          <dt>{{ 'gameyas.form.amount' | transloco }}</dt>
+          <dd>
+            {{
+              'gameyas.amountTimesShares'
+                | transloco: { amount: (p.contributionAmount | money), shares: p.shareCount }
+            }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.form.calc.pot' | transloco }}</dt>
+          <dd>{{ p.pot | money }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.form.frequency' | transloco }}</dt>
+          <dd>{{ 'gameyas.frequency.' + p.frequency | transloco }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.page.start' | transloco }}</dt>
+          <dd>{{ p.startDate | cairoDate }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.page.end' | transloco }}</dt>
+          <dd>{{ p.endDate | cairoDate }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.form.graceDays' | transloco }}</dt>
+          <dd>{{ p.graceDays }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.form.payoutTiming' | transloco }}</dt>
+          <dd>{{ 'gameyas.payoutTiming.' + p.payoutTiming | transloco }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.form.orderMethod' | transloco }}</dt>
+          <dd>{{ 'gameyas.orderMethod.' + p.orderMethod | transloco }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'gameyas.form.maxSharesPerMember' | transloco }}</dt>
+          <dd>{{ p.maxSharesPerMember }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'invite.available' | transloco: { count: p.availableShares } }}</dt>
+        </div>
+      </dl>
+
+      @if (p.rulesText) {
+        <section aria-labelledby="rules-title">
+          <h2 id="rules-title" class="section-title">{{ 'invite.rulesTitle' | transloco }}</h2>
+          <p class="rules" data-testid="rules-text">{{ p.rulesText }}</p>
+        </section>
+      }
+      <p class="notice" role="note">{{ 'gameyas.page.noMoneyNotice' | transloco }}</p>
+
+      @switch (view()) {
+        @case ('member') {
+          <section class="state" data-testid="state-member">
+            <p>
+              {{
+                (p.relationship === 'Organizer' ? 'invite.organizerOwn' : 'invite.member')
+                  | transloco
+              }}
+            </p>
+            <a mat-flat-button [routerLink]="['/gameyas', p.gameyaId]" data-testid="open-gameya">
+              {{ 'invite.open' | transloco }}
+            </a>
+          </section>
+        }
+        @case ('pending') {
+          <section class="state" data-testid="state-pending">
+            <p>{{ 'invite.pending' | transloco }}</p>
+            <div class="actions">
+              @if (p.requestNeedsReaccept) {
+                <button
+                  mat-flat-button
+                  type="button"
+                  data-testid="reaccept"
+                  [disabled]="busy()"
+                  (click)="reaccept()"
+                >
+                  {{ 'invite.reaccept' | transloco }}
+                </button>
+              }
+              <button
+                mat-stroked-button
+                type="button"
+                data-testid="withdraw"
+                [disabled]="busy()"
+                (click)="withdraw()"
+              >
+                {{ 'invite.withdraw' | transloco }}
+              </button>
+            </div>
+          </section>
+        }
+        @case ('invited') {
+          <section class="state" data-testid="state-invited">
+            <p>{{ 'invite.invited' | transloco }}</p>
+            <a
+              mat-flat-button
+              [routerLink]="['/gameyas/invites', p.inviteId, 'accept']"
+              data-testid="open-invite"
+            >
+              {{ 'invite.openInvite' | transloco }}
+            </a>
+          </section>
+        }
+        @case ('full') {
+          <section class="state" data-testid="state-full">
+            <h2>{{ 'invite.full' | transloco }}</h2>
+            <p>{{ 'invite.fullBody' | transloco }}</p>
+          </section>
+        }
+        @case ('open') {
+          @if (p.relationship === null) {
+            <a
+              mat-flat-button
+              routerLink="/login"
+              [queryParams]="loginQuery"
+              data-testid="login-to-join"
+            >
+              {{ 'invite.login' | transloco }}
+            </a>
+          } @else {
+            <gy-join-form
+              [maxShares]="maxShares()"
+              [roundCount]="roundCount()"
+              [orderMethod]="p.orderMethod"
+              [busy]="busy()"
+              (submitted)="join($event)"
+            />
+          }
+        }
+      }
+    }
+  }
+}

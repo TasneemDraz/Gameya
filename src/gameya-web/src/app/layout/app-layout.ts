@@ -40,12 +40,21 @@ const WIDE_QUERY = '(min-width: 960px)';
           <nav class="side-nav" [attr.aria-label]="'app.navigation' | transloco">
             <a
               mat-button
-              routerLink="/profile"
+              routerLink="/gameyas"
               routerLinkActive="active"
-              [routerLinkActiveOptions]="{ exact: true }"
+              [routerLinkActiveOptions]="{ exact: false }"
             >
               <mat-icon>home</mat-icon>
               {{ 'nav.home' | transloco }}
+            </a>
+            <a
+              mat-button
+              routerLink="/profile"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: false }"
+            >
+              <mat-icon>person</mat-icon>
+              {{ 'nav.profile' | transloco }}
             </a>
           </nav>
         </mat-sidenav>
@@ -55,12 +64,20 @@ const WIDE_QUERY = '(min-width: 960px)';
       <main class="content"><router-outlet /></main>
       <nav class="bottom-nav" [attr.aria-label]="'app.navigation' | transloco">
         <a
-          routerLink="/profile"
+          routerLink="/gameyas"
           routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: true }"
+          [routerLinkActiveOptions]="{ exact: false }"
         >
           <mat-icon>home</mat-icon>
           <span>{{ 'nav.home' | transloco }}</span>
+        </a>
+        <a
+          routerLink="/profile"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: false }"
+        >
+          <mat-icon>person</mat-icon>
+          <span>{{ 'nav.profile' | transloco }}</span>
         </a>
       </nav>
     }
